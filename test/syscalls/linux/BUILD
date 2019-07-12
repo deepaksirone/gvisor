@@ -2404,6 +2404,63 @@ cc_binary(
 )
 
 cc_binary(
+    name = "socket_bind_to_device_test",
+    testonly = 1,
+    srcs = [
+        "socket_bind_to_device.cc",
+    ],
+    linkstatic = 1,
+    deps = [
+        ":ip_socket_test_util",
+        ":socket_bind_to_device_util",
+        ":socket_test_util",
+        "//test/util:test_main",
+        "//test/util:test_util",
+        "//test/util:thread_util",
+        "//test/util:uid_util",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_binary(
+    name = "socket_bind_to_device_sequence_test",
+    testonly = 1,
+    srcs = [
+        "socket_bind_to_device_sequence.cc",
+    ],
+    linkstatic = 1,
+    deps = [
+        ":ip_socket_test_util",
+        ":socket_bind_to_device_util",
+        ":socket_test_util",
+        "//test/util:test_main",
+        "//test/util:test_util",
+        "//test/util:thread_util",
+        "//test/util:uid_util",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_binary(
+    name = "socket_bind_to_device_distribution_test",
+    testonly = 1,
+    srcs = [
+        "socket_bind_to_device_distribution.cc",
+    ],
+    linkstatic = 1,
+    deps = [
+        ":ip_socket_test_util",
+        ":socket_bind_to_device_util",
+        ":socket_test_util",
+        "//test/util:test_main",
+        "//test/util:test_util",
+        "//test/util:thread_util",
+        "//test/util:uid_util",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_binary(
     name = "socket_ip_udp_loopback_non_blocking_test",
     testonly = 1,
     srcs = [
@@ -2676,6 +2733,22 @@ cc_library(
         "//test/util:timer_util",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "socket_bind_to_device_util",
+    testonly = 1,
+    srcs = [
+        "socket_bind_to_device_util.cc",
+    ],
+    hdrs = [
+        "socket_bind_to_device_util.h",
+    ],
+    deps = [
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/strings",
     ],
     alwayslink = 1,
 )
@@ -3192,6 +3265,7 @@ cc_binary(
         "//test/util:test_main",
         "//test/util:test_util",
         "//test/util:thread_util",
+        "//test/util:uid_util",
         "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
     ],
