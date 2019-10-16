@@ -377,6 +377,7 @@ var AMD64 = &kernel.SyscallTable{
 		327: syscalls.Supported("preadv2", Preadv2),
 		328: syscalls.PartiallySupported("pwritev2", Pwritev2, "Flag RWF_HIPRI is not supported.", nil),
 		332: syscalls.Supported("statx", Statx),
+		350: sycalls.Supported("hypercall", Hypercall1),
 	},
 
 	Emulate: map[usermem.Addr]uintptr{
