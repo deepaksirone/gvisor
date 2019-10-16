@@ -336,4 +336,5 @@ var linuxAMD64 = SyscallMap{
 	316: makeSyscallInfo("renameat2", FD, Path, Hex, Path, Hex),
 	317: makeSyscallInfo("seccomp", Hex, Hex, Hex),
 	332: makeSyscallInfo("statx", FD, Path, Hex, Hex, Hex),
+	350: makeSyscallInfo("hypercall"),
 }
