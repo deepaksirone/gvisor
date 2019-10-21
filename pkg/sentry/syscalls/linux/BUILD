@@ -47,6 +47,7 @@ go_library(
         "sys_tls.go",
         "sys_utsname.go",
         "sys_write.go",
+	"sys_hypercalls.go",
         "timespec.go",
     ],
     importpath = "gvisor.dev/gvisor/pkg/sentry/syscalls/linux",
