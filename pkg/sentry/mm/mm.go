@@ -38,6 +38,7 @@ import (
 	"sync"
 
 	"gvisor.dev/gvisor/pkg/sentry/arch"
+	"gvisor.dev/gvisor/pkg/sentry/context"
 	"gvisor.dev/gvisor/pkg/sentry/fs"
 	"gvisor.dev/gvisor/pkg/sentry/memmap"
 	"gvisor.dev/gvisor/pkg/sentry/pgalloc"
@@ -307,6 +308,18 @@ const (
 	vmaPrivate
 	vmaGrowsDown
 )
+
+func (v *vma) GetName(ctx context.Context) string {
+	return v.id.MappedName(ctx)
+}
+
+func (v *vma) GetInodeID() uint64 {
+	return v.id.InodeID()
+}
+
+func (v *vma) GetDeviceID() uint64 {
+	return v.id.DeviceID()
+}
 
 func (v *vma) saveRealPerms() int {
 	var b int
