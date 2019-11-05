@@ -32,3 +32,20 @@ func Hypercall1(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.Sy
 	t.Infof("Hypercall1: Mapped name of VMA: %s, Inode Number: %x, Device Number: %x", v, i, d)
 	return 0, nil, nil
 }
+
+// args[0] = fd; args[1] = hostname ptr; args[2] = payload ptr
+// Assuming the payload contains plaintext HTTP data
+func ValidateDescriptor(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.SyscallControl, error) {
+	fd := args[0].Int()
+	hostname_ptr := args[1].Pointer()
+	payload_ptr := args[2].Pointer()
+
+	// Max hostname length is 255 for now
+	hostname := t.CopyInString(addr, linux.NAME_MAX)
+	if hostname == "" {
+		return 0, nil, nil
+	}
+
+	// Need to write protect the payload ptr address range
+
+}
