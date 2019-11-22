@@ -223,7 +223,7 @@ go_repository(
 go_repository(
     name = "com_github_zeromq_goczmq",
     importpath = "github.com/deepaksirone/goczmq",
-    commit = "77b2cc1af476f22a1eedce5b40fdd66a3253a5d2",
+    commit = "97498302e3f9ed0c55f9a9adb2244c28305521c9",
 )
 # System Call test dependencies.
 http_archive(
