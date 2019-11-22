@@ -1,0 +1,16 @@
+package(licenses = ["notice"])
+
+load("//tools/go_stateify:defs.bzl", "go_library")
+
+go_library(
+    name = "guard",
+    srcs = [
+        "guard.go",
+    ],
+    importpath = "gvisor.dev/gvisor/pkg/sentry/kernel/guard",
+    visibility = ["//pkg/sentry:internal"],
+    deps = [
+	"@com_github_zeromq_goczmq//:go_default_library"
+    ],
+)
+

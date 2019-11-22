@@ -12,6 +12,7 @@ require (
 	github.com/google/subcommands v0.0.0-20190508160503-636abe8753b8
 	github.com/google/uuid v0.0.0-20171129191014-dec09d789f3d
 	github.com/kr/pty v1.1.1
+	github.com/zeromq/goczmq
 	github.com/opencontainers/runtime-spec v0.1.2-0.20171211145439-b2d941ef6a78
 	github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2
 	github.com/vishvananda/netlink v1.0.1-0.20190318003149-adb577d4a45e

@@ -25,7 +25,7 @@ go_rules_dependencies()
 
 go_register_toolchains(
     go_version = "1.13",
-    nogo = "@//:nogo",
+    #nogo = "@//:nogo",
 )
 
 load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies", "go_repository")
@@ -220,6 +220,11 @@ go_repository(
     version = "v1.3.1",
 )
 
+go_repository(
+    name = "com_github_zeromq_goczmq",
+    importpath = "github.com/deepaksirone/goczmq",
+    commit = "77b2cc1af476f22a1eedce5b40fdd66a3253a5d2",
+)
 # System Call test dependencies.
 http_archive(
     name = "com_github_gflags_gflags",

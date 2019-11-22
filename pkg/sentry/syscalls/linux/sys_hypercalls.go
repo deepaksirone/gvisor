@@ -33,6 +33,7 @@ func Hypercall1(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.Sy
 	return 0, nil, nil
 }
 
+/*
 // args[0] = fd; args[1] = hostname ptr; args[2] = payload ptr
 // Assuming the payload contains plaintext HTTP data
 func ValidateDescriptor(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.SyscallControl, error) {
@@ -48,4 +49,4 @@ func ValidateDescriptor(t *kernel.Task, args arch.SyscallArguments) (uintptr, *k
 
 	// Need to write protect the payload ptr address range
 
-}
+}*/
