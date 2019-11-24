@@ -2,8 +2,9 @@ package guard
 
 import (
 	//"fmt"
-	//"encoding/json"
+	"encoding/json"
 	zmq "github.com/deepaksirone/goczmq"
+
 	"os"
 	"strings"
 	"syscall"
@@ -30,7 +31,7 @@ type Guard struct {
 	// Running time
 	runningTime uint
 	// Event mapping table
-	eventMap map[uint64]int
+	eventMap map[int64]int
 	// State table
 	stateTable map[string]int
 	// IO whitelist
@@ -40,11 +41,27 @@ type Guard struct {
 	// URL whitelist
 	urlWhitelist map[string]int
 	// Policy table
-	policyTable map[string]int
+	policyTable map[string]*ListNode
 	// Controller IP
 	ctrIP string
 	// Controller Port
 	ctrPort uint
+	// Local Function Graph
+	graph *ListNode
+	// Current State
+	curState *ListNode
+}
+
+type Policy struct {
+	//NAME    string
+	//EVENTID []map[string]float64
+	URL  []string
+	IP   []string
+	IOR  float64
+	IO   []string
+	NETR float64
+	//GLOBALGRAPH map[string][]map[string]interface{}
+	GRAPH map[string]interface{}
 }
 
 func (g *Guard) get_func_name() string {
@@ -93,7 +110,7 @@ func djb2hash(func_name, event, url, action string) uint64 {
 	return hash
 }
 
-func (g *Guard) get_event_id(event_hash uint64) (int, bool) {
+func (g *Guard) get_event_id(event_hash int64) (int, bool) {
 	id, present := g.eventMap[event_hash]
 	return id, present
 }
@@ -121,8 +138,159 @@ func (g *Guard) Lookup(hash_id int, key string) bool {
 	}
 }
 
-func KeyInitReq(guard_id []byte) {
-	m := []byte("helloworld!")
-	router, _ := zmq.NewRouter("tcp://*:5555")
-	router.SendFrame(m, zmq.FlagNone)
+func KeyInitReq(s *zmq.Sock, guard_id []byte) {
+	m := MsgInit(guard_id)
+	s.SendFrame(m, zmq.FlagNone)
+}
+
+func SendToCtr(s *zmq.Sock, typ, action byte, data []byte) {
+	m := MsgBasic(typ, action, data)
+	s.SendFrame(m, zmq.FlagNone)
+}
+
+func (g *Guard) PolicyInitHandler(msg []byte) {
+	var f Policy
+	err := json.Unmarshal(msg, &f)
+	if err != nil {
+		return
+	}
+	g.ior = int(f.IOR)
+	g.netr = int(f.NETR)
+	for i := 0; i < len(f.IO); i++ {
+		g.ioWhitelist[f.IO[i]] = 1
+	}
+
+	for i := 0; i < len(f.IP); i++ {
+		g.ipWhitelist[f.IP[i]] = 1
+	}
+
+	for i := 0; i < len(f.URL); i++ {
+		g.urlWhitelist[f.URL[i]] = 1
+	}
+
+	func_name := f.GRAPH["NAME"].(string)
+	eventid := f.GRAPH["EVENTID"].([]interface{})
+
+	var eventid_map []map[string]int
+
+	for _, v := range eventid {
+		switch vv := v.(type) {
+		case map[string]interface{}:
+			m := make(map[string]int)
+			for i, u := range vv {
+				m[i] = int(u.(float64))
+			}
+			eventid_map = append(eventid_map, m)
+		}
+	}
+
+	for _, m := range eventid_map {
+		h := int64(m["h"])
+		k := m["e"]
+		g.eventMap[h] = k
+	}
+
+	g.graph = ListInit()
+	var ns_map []map[string]int
+	ns := f.GRAPH["ns"].([]interface{})
+	for _, v := range ns {
+		switch vv := v.(type) {
+		case map[string]interface{}:
+			m := make(map[string]int)
+			for i, u := range vv {
+				//fmt.Printf("%T %T\n", i, u)
+				//fmt.Println(i, u)
+				//f, _ := strconv.ParseInt(i, 10, 64)
+				m[i] = int(u.(float64))
+			}
+			ns_map = append(ns_map, m)
+		}
+	}
+
+	for _, m := range ns_map {
+		var tnode Node
+		tnode.id = int(m["id"])
+		tnode.next_cnt = 0
+		tnode.loop_cnt = int(m["cnt"])
+		g.graph.Append(&tnode)
+	}
+
+	es := f.GRAPH["es"].([]interface{})
+	for _, v := range es {
+		switch vv := v.(type) {
+		case map[string]interface{}:
+			var dsts []int
+			var src []int
+			for i, u := range vv {
+				if i == "1" {
+					d := u.([]interface{})
+					for _, v1 := range d {
+						dsts = append(dsts, int(v1.(float64)))
+					}
+				} else {
+					src = append(src, int(u.(float64)))
+				}
+			}
+			p_ns := g.graph.GetElement(src[0] + 1)
+			for _, d := range dsts {
+				if d != -1 {
+					p_nd := g.graph.GetPtr(d + 1)
+					p_ns.successors[p_ns.next_cnt] = p_nd
+					p_ns.next_cnt = p_ns.next_cnt + 1
+				} else {
+					p_ns.successors[p_ns.next_cnt] = g.graph
+					p_ns.next_cnt = p_ns.next_cnt + 1
+				}
+			}
+
+		}
+	}
+	g.policyTable[func_name] = g.graph
+	g.curState = g.graph
+}
+
+func (g *Guard) PolicyInit() {
+	p := g.graph.next
+	for p != g.graph {
+		nptr := p.data
+		nptr.ctr = nptr.loop_cnt
+		p = p.next
+	}
+	g.curState = g.graph
+}
+
+func (g *Guard) CheckPolicy(event_id int) bool {
+	fname := g.get_func_name()
+	_, present := g.policyTable[fname]
+	if !present {
+		return false
+	}
+
+	p := g.curState
+	if g.graph == g.curState {
+		g.PolicyInit()
+		g.curState = g.curState.next
+		p = g.curState
+	}
+
+	nptr := p.data
+	if nptr.id == event_id {
+		if nptr.ctr > 0 {
+			nptr.ctr = nptr.ctr - 1
+			return true
+		}
+		return false
+	}
+
+	for i := 0; i < nptr.next_cnt; i++ {
+		next_ptr := nptr.successors[i]
+		next_d_ptr := next_ptr.data
+
+		if (next_d_ptr.ctr > 0) && (next_d_ptr.id == event_id) {
+			next_d_ptr.ctr = next_d_ptr.ctr - 1
+			g.curState = next_ptr
+			return true
+		}
+	}
+	return false
 }
