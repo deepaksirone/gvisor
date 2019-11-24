@@ -6,6 +6,8 @@ go_library(
     name = "guard",
     srcs = [
         "guard.go",
+	"msg.go",
+	"linked_list.go"
     ],
     importpath = "gvisor.dev/gvisor/pkg/sentry/kernel/guard",
     visibility = ["//pkg/sentry:internal"],

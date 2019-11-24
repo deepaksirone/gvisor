@@ -1,8 +1,9 @@
 package guard
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
+	//"crypto/ecdsa"
+	//"crypto/elliptic"
+	"fmt"
 	"strconv"
 )
 
@@ -19,16 +20,16 @@ const (
 	TYPE_CHECK_RESP   byte = 0x10
 	TYPE_INFO         byte = 0x11
 
-	ACTION_NOOP          int = 0x01
-	ACTION_TEST          int = 0x02
-	ACTION_CTR_REQ       int = 0x03
-	ACTION_GD_RESP       int = 0x04
-	ACTION_USER          int = 0x05
-	ACTION_POLICY_ADD    int = 0x06
-	ACTION_POLICY_DEL    int = 0x07
-	ACTION_POLICY_UPDATE int = 0x08
-	ACTION_POLICY_INIT   int = 0x09
-	ACTION_KEY_DIST      int = 0x10
+	ACTION_NOOP          byte = 0x01
+	ACTION_TEST          byte = 0x02
+	ACTION_CTR_REQ       byte = 0x03
+	ACTION_GD_RESP       byte = 0x04
+	ACTION_USER          byte = 0x05
+	ACTION_POLICY_ADD    byte = 0x06
+	ACTION_POLICY_DEL    byte = 0x07
+	ACTION_POLICY_UPDATE byte = 0x08
+	ACTION_POLICY_INIT   byte = 0x09
+	ACTION_KEY_DIST      byte = 0x10
 
 	STATE_REQ_RECIVED  int = 0
 	STATE_REQ_VERIFIED int = 1
@@ -49,9 +50,9 @@ const (
 	POLICY_TABLE_DONE   int = 2
 	POLICY_TABLE_NOOP   int = 3
 
-	MAX_LEN_SIZE   int = 8
-	MAX_BODY_LEN   int = 4294967295
-	MAX_POLICY_LEN int = 1073741824
+	MAX_LEN_SIZE   int   = 8
+	MAX_BODY_LEN   int64 = 4294967295
+	MAX_POLICY_LEN int64 = 1073741824
 
 	MSG_HDR_LEN int = 10
 	MSG_SIG_LEN int = 64
@@ -77,12 +78,12 @@ type Msg struct {
 type MsgStr struct {
 	header    [10]byte
 	signature [64]byte
-	body      *[]byte
+	body      []byte
 }
 
 type MsgStrBuff struct {
 	msg_len int
-	msg_str *[]byte
+	msg_str []byte
 }
 
 type Keys struct {
@@ -96,11 +97,11 @@ type NodeInfo struct {
 
 type Event struct {
 	ename [5]byte
-	res   *[]byte
+	res   []byte
 }
 
 type ParaStateCheck struct {
-	table *[]byte
+	table []byte
 	key   [MAX_KEY_LEN]byte
 }
 
@@ -113,10 +114,9 @@ func InitMsgHeader(typ, action byte, msg_len int) Header {
 	var hdr Header
 	hdr.typ = typ
 	hdr.action = action
-	// hdr.length is initialized to zeroes by default
-	//hdr.length = [MAX_LEN_SIZE + 1]byte{'0', '0', '0', '0', '0', '0', '0', '0', 0x00}
 	s := fmt.Sprintf("%08x", msg_len)
 	copy(hdr.length[:], s)
+
 	return hdr
 }
 
@@ -124,7 +124,7 @@ func HeaderToStr(h Header) []byte {
 	var s []byte
 	s = append(s, h.typ)
 	s = append(s, h.action)
-	s = append(s, h.length[:8]...)
+	s = append(s, h.length[:]...)
 	return s
 }
 
@@ -140,7 +140,7 @@ func KeysToString(k Keys) []byte {
 	var s []byte
 	s = append(s, k.key_priv[:]...)
 	s = append(s, k.key_pub[:]...)
-	s = append(s, []byte{0})
+	s = append(s, []byte{0}...)
 	return s
 }
 
@@ -174,7 +174,8 @@ func MsgInit(guard_id []byte) []byte {
 }
 
 func MsgBasic(typ, action byte, msg_body []byte) []byte {
-	var hash [SHA256_DIGEST_SIZE]byte
+	//TODO: Using the signature length here, should it be hash?
+	var hash [MSG_SIG_LEN]byte
 	var res []byte
 	h := InitMsgHeader(typ, action, len(msg_body))
 	t_hdr_str := HeaderToStr(h)
@@ -184,13 +185,13 @@ func MsgBasic(typ, action byte, msg_body []byte) []byte {
 	return res
 }
 
-func MsgParser(msg_str []byte) {
+func MsgParser(msg_str []byte) Msg {
 	var msg Msg
-	var hdr []byte
-	msg.header = StrToHeader(msg_str[:MSG_HDR_LEN])
-	s := string(msg.length)
-	l, err := strconv.ParseInt(s, 16, 64)
-	msg.body = append(msg.body, msg_str[MSG_HDR_LEN:MSG_HDR_LEN+l]...)
-	copy(msg.signature, msg_str[MSG_HDR_LEN+l:MSG_HDR_LEN+l+MSG_SIG_LEN])
+	msg.header = StrToHeader(msg_str[:MSG_HDR_LEN+1])
+	s := string(msg.header.length[:MAX_LEN_SIZE])
+	l, _ := strconv.ParseInt(s, 16, 32)
+
+	msg.body = append(msg.body, msg_str[MSG_HDR_LEN+1:MSG_HDR_LEN+1+int(l)]...)
+	copy(msg.signature[:], msg_str[MSG_HDR_LEN+int(l)+1:MSG_HDR_LEN+1+int(l)+MSG_SIG_LEN])
 	return msg
 }
