@@ -12,7 +12,8 @@ go_library(
     importpath = "gvisor.dev/gvisor/pkg/sentry/kernel/guard",
     visibility = ["//pkg/sentry:internal"],
     deps = [
-	"@com_github_zeromq_goczmq//:go_default_library"
+	"@com_github_zeromq_goczmq//:go_default_library",
+	"//pkg/log"
     ],
 )
 

@@ -4,8 +4,9 @@ import (
 	//"fmt"
 	"encoding/json"
 	zmq "github.com/deepaksirone/goczmq"
-
+	//"gvisor.dev/gvisor/pkg/log"
 	"os"
+	"strconv"
 	"strings"
 	"syscall"
 )
@@ -45,7 +46,7 @@ type Guard struct {
 	// Controller IP
 	ctrIP string
 	// Controller Port
-	ctrPort uint
+	ctrPort int64
 	// Local Function Graph
 	graph *ListNode
 	// Current State
@@ -64,14 +65,19 @@ type Policy struct {
 	GRAPH map[string]interface{}
 }
 
-func (g *Guard) get_func_name() string {
+type KernMsg struct {
+	eventName [4]byte
+	jsonData  []byte
+}
+
+func get_func_name() string {
 	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") == "" {
 		return "test0"
 	}
 	return os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
 }
 
-func (g *Guard) get_region_name() string {
+func get_region_name() string {
 	if os.Getenv("AWS_REGION") == "" {
 		return "AWS_EAST"
 	}
@@ -115,11 +121,15 @@ func (g *Guard) get_event_id(event_hash int64) (int, bool) {
 	return id, present
 }
 
-func (g *Guard) GuardInit() {
+func New(ctrIP string, ctrPort int64) Guard {
+	var g Guard
 	g.startTime = get_time()
 	g.requestNo = 0
 	g.ioNo = 0
 	g.runningTime = 0
+	g.ctrIP = ctrIP
+	g.ctrPort = ctrPort
+	return g
 }
 
 func (g *Guard) Lookup(hash_id int, key string) bool {
@@ -260,7 +270,7 @@ func (g *Guard) PolicyInit() {
 }
 
 func (g *Guard) CheckPolicy(event_id int) bool {
-	fname := g.get_func_name()
+	fname := get_func_name()
 	_, present := g.policyTable[fname]
 	if !present {
 		return false
@@ -293,4 +303,19 @@ func (g *Guard) CheckPolicy(event_id int) bool {
 		}
 	}
 	return false
+}
+
+func (g *Guard) Run(ch chan KernMsg) {
+	// Connect to the controller
+	//log.Infof("Started Guard with id: " + id)
+	id := get_func_name() + strconv.FormatInt(get_time(), 10)
+	//log.Infof("Started Guard with id: " + id)
+	idOpt := zmq.SockSetIdentity(id)
+	updater := zmq.NewDealerChanneler("tcp://"+g.ctrIP+":"+strconv.FormatInt(g.ctrPort, 10), idOpt)
+	//log.Infof("Started Guard with id: " + id)
+	keyInitMsg := MsgInit([]byte(id))
+	updater.SendChan <- [][]byte{keyInitMsg}
+	//log.Infof("Send KeyInitReq to controller")
+	for {
+	}
 }
