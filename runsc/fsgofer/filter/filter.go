@@ -29,5 +29,6 @@ func Install() error {
 	// when not enabled.
 	s.Merge(instrumentationFilters())
 
-	return seccomp.Install(s)
+	//return seccomp.Install(s)
+	return nil
 }

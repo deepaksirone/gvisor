@@ -200,9 +200,9 @@ func (g *Gofer) Execute(_ context.Context, f *flag.FlagSet, args ...interface{})
 		Fatalf("too many FDs passed for mounts. mounts: %d, FDs: %d", mountIdx, len(g.ioFDs))
 	}
 
-	//if err := filter.Install(); err != nil {
-	//	Fatalf("installing seccomp filters: %v", err)
-	//}
+	if err := filter.Install(); err != nil {
+		Fatalf("installing seccomp filters: %v", err)
+	}
 
 	runServers(ats, g.ioFDs)
 	return subcommands.ExitSuccess

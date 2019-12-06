@@ -4,7 +4,7 @@ import (
 	//"fmt"
 	"encoding/json"
 	zmq "github.com/deepaksirone/goczmq"
-	//"gvisor.dev/gvisor/pkg/log"
+	"gvisor.dev/gvisor/pkg/log"
 	"os"
 	"strconv"
 	"strings"
@@ -307,14 +307,25 @@ func (g *Guard) CheckPolicy(event_id int) bool {
 
 func (g *Guard) Run(ch chan KernMsg) {
 	// Connect to the controller
-	//log.Infof("Started Guard with id: " + id)
 	id := get_func_name() + strconv.FormatInt(get_time(), 10)
-	//log.Infof("Started Guard with id: " + id)
+	log.Infof("Started Guard with id: " + id)
 	idOpt := zmq.SockSetIdentity(id)
-	updater := zmq.NewDealerChanneler("tcp://"+g.ctrIP+":"+strconv.FormatInt(g.ctrPort, 10), idOpt)
-	//log.Infof("Started Guard with id: " + id)
+	updater, err := zmq.NewDealer("tcp://127.0.0.1:5000", idOpt)
+	if err != nil {
+		log.Infof("Error attaching to Controller")
+	}
+	e := updater.Connect("tcp://127.0.0.1:5000")
+	if e != nil {
+		log.Infof("Error connecting to Controller")
+	}
+
+	log.Infof("Started Guard with id: " + id)
 	keyInitMsg := MsgInit([]byte(id))
-	updater.SendChan <- [][]byte{keyInitMsg}
+	er := updater.SendFrame(keyInitMsg, zmq.FlagNone)
+	if er != nil {
+		log.Infof("Error sending message to Controller")
+	}
+
 	//log.Infof("Send KeyInitReq to controller")
 	for {
 	}
