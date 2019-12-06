@@ -10,6 +10,7 @@ go_binary(
         "version.go",
     ],
     pure = "off",
+    static = "on",
     visibility = [
         "//visibility:public",
     ],
