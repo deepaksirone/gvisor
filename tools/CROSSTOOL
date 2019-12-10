@@ -1,0 +1,33 @@
+major_version: "local"
+minor_version: ""
+
+toolchain {
+  toolchain_identifier: "gcc-musl"
+  host_system_name: "linux"
+  target_system_name: "linux"
+  target_cpu: "x86_64"
+  target_libc: "x86_64"
+  abi_version: "unknown"
+  abi_libc_version: "unknown"
+
+  tool_path { name: "ar" path: "musl/bin/x86_64-linux-musl-ar" }
+  tool_path { name: "cpp" path: "musl/bin/x86_64-linux-musl-cpp" }
+  tool_path { name: "gcc" path: "musl/bin/x86_64-linux-musl-gcc" }
+  tool_path { name: "gcov" path: "musl/bin/x86_64-linux-musl-gcov" }
+  tool_path { name: "ld" path: "musl/bin/x86_64-linux-musl-ld" }
+  tool_path { name: "nm" path: "musl/bin/x86_64-linux-musl-nm" }
+  tool_path { name: "objcopy" path: "musl/bin/x86_64-linux-musl-objcopy" }
+  tool_path { name: "objdump" path: "musl/bin/x86_64-linux-musl-objdump" }
+  tool_path { name: "strip" path: "musl/bin/x86_64-linux-musl-strip" }
+
+  compiler_flag: "-no-canonical-prefixes"
+  linker_flag: "-L/usr/local/include -l:libstdc++.a"
+
+  compiler_flag: "-v"
+  cxx_builtin_include_directory: "/usr/local/include/"
+}
+
+default_toolchain {
+  cpu: "x86_64"
+  toolchain_identifier: "gcc-musl"
+}

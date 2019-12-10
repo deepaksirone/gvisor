@@ -504,6 +504,9 @@ func (s *Sandbox) createSandboxProcess(conf *boot.Config, args *Args, startSyncF
 		cmd.Args = append(cmd.Args, "--pidns=true")
 	}
 
+	//log.Infof("The network conf is: %+v", conf.Network)
+	//conf.Network = boot.NetworkHost
+	log.Infof("The network conf is: %+v", conf.Network)
 	// Joins the network namespace if network is enabled. the sandbox talks
 	// directly to the host network, which may have been configured in the
 	// namespace.
