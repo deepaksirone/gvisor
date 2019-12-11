@@ -19,7 +19,7 @@ package filter
 
 import (
 	"gvisor.dev/gvisor/pkg/log"
-	//"gvisor.dev/gvisor/pkg/seccomp"
+	"gvisor.dev/gvisor/pkg/seccomp"
 	"gvisor.dev/gvisor/pkg/sentry/platform"
 )
 
@@ -51,8 +51,8 @@ func Install(opt Options) error {
 
 	s.Merge(opt.Platform.SyscallFilters())
 
-	//return seccomp.Install(s)
-	return nil
+	return seccomp.Install(s)
+	//return nil
 }
 
 // Report writes a warning message to the log.

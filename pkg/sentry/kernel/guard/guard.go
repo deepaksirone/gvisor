@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	zmq "github.com/deepaksirone/goczmq"
 	"gvisor.dev/gvisor/pkg/log"
-	"net"
+	//"net"
 	"os"
 	"strconv"
 	"strings"
@@ -327,10 +327,10 @@ func (g *Guard) Run(ch chan KernMsg) {
 		log.Infof("Error sending message to Controller")
 	}
 
-	_, ero := net.Dial("tcp", "127.0.0.1:7777")
-	if ero != nil {
-		log.Infof("Unable to connect to Controller")
-		log.Infof(ero.Error())
-	}
+	//_, ero := net.Dial("tcp", "127.0.0.1:7777")
+	//if ero != nil {
+	//	log.Infof("Unable to connect to Controller")
+	//	log.Infof(ero.Error())
+	//}
 	//log.Infof("Send KeyInitReq to controller")
 }

@@ -53,7 +53,7 @@ import (
 	"gvisor.dev/gvisor/pkg/sentry/kernel/auth"
 	"gvisor.dev/gvisor/pkg/sentry/kernel/epoll"
 	"gvisor.dev/gvisor/pkg/sentry/kernel/futex"
-	guard "gvisor.dev/gvisor/pkg/sentry/kernel/guard"
+	//guard "gvisor.dev/gvisor/pkg/sentry/kernel/guard"
 	"gvisor.dev/gvisor/pkg/sentry/kernel/sched"
 	ktime "gvisor.dev/gvisor/pkg/sentry/kernel/time"
 	"gvisor.dev/gvisor/pkg/sentry/limits"
@@ -204,10 +204,10 @@ type Kernel struct {
 	unimplementedSyscallEmitter eventchannel.Emitter `state:"nosave"`
 
 	//Guard
-	guard guard.Guard
+	//guard guard.Guard
 
 	//Guard channel
-	guardChan chan guard.KernMsg
+	//guardChan chan guard.KernMsg
 }
 
 // InitKernelArgs holds arguments to Init.
@@ -301,8 +301,8 @@ func (k *Kernel) Init(args InitKernelArgs) error {
 	k.monotonicClock = &timekeeperClock{tk: args.Timekeeper, c: sentrytime.Monotonic}
 	k.futexes = futex.NewManager()
 	k.netlinkPorts = port.New()
-	k.guard = guard.New("127.0.0.1", 5000)
-	k.guardChan = make(chan guard.KernMsg)
+	//k.guard = guard.New("127.0.0.1", 5000)
+	//k.guardChan = make(chan guard.KernMsg)
 
 	return nil
 }
@@ -845,7 +845,7 @@ func (k *Kernel) Start() error {
 		Period:  linux.ClockTick,
 	})
 
-	go k.guard.Run(k.guardChan)
+	//go k.guard.Run(k.guardChan)
 	// If k was created by LoadKernelFrom, timers were stopped during
 	// Kernel.SaveTo and need to be resumed. If k was created by NewKernel,
 	// this is a no-op.
