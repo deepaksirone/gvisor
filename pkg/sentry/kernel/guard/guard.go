@@ -3,9 +3,9 @@ package guard
 import (
 	//"fmt"
 	"encoding/json"
-	zmq "github.com/deepaksirone/goczmq"
+	//zmq "github.com/deepaksirone/goczmq"
 	"gvisor.dev/gvisor/pkg/log"
-	//"net"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -149,6 +149,7 @@ func (g *Guard) Lookup(hash_id int, key string) bool {
 	}
 }
 
+/*
 func KeyInitReq(s *zmq.Sock, guard_id []byte) {
 	m := MsgInit(guard_id)
 	s.SendFrame(m, zmq.FlagNone)
@@ -158,7 +159,7 @@ func SendToCtr(s *zmq.Sock, typ, action byte, data []byte) {
 	m := MsgBasic(typ, action, data)
 	s.SendFrame(m, zmq.FlagNone)
 }
-
+*/
 func (g *Guard) PolicyInitHandler(msg []byte) {
 	var f Policy
 	err := json.Unmarshal(msg, &f)
@@ -310,27 +311,32 @@ func (g *Guard) Run(ch chan KernMsg) {
 	// Connect to the controller
 	id := get_func_name() + strconv.FormatInt(get_time(), 10)
 	log.Infof("Started Guard with id: " + id)
-	idOpt := zmq.SockSetIdentity(id)
-	updater, err := zmq.NewDealer("tcp://127.0.0.1:5000", idOpt)
-	if err != nil {
-		log.Infof("Error attaching to Controller")
-	}
-	e := updater.Connect("tcp://127.0.0.1:5000")
-	if e != nil {
-		log.Infof("Error connecting to Controller")
-	}
+	/*
+		idOpt := zmq.SockSetIdentity(id)
+		updater := zmq.NewDealerChanneler("tcp://127.0.0.1:5000", idOpt)
 
-	log.Infof("Started Guard with id: " + id)
-	keyInitMsg := MsgInit([]byte(id))
-	er := updater.SendFrame(keyInitMsg, zmq.FlagNone)
-	if er != nil {
-		log.Infof("Error sending message to Controller")
-	}
+			if err != nil {
+				log.Infof("[ZMQ] Error attaching to Controller")
+			}
 
-	//_, ero := net.Dial("tcp", "127.0.0.1:7777")
-	//if ero != nil {
-	//	log.Infof("Unable to connect to Controller")
-	//	log.Infof(ero.Error())
-	//}
-	//log.Infof("Send KeyInitReq to controller")
+			e := updater.Connect("tcp://127.0.0.1:5000")
+			if e != nil {
+				log.Infof("Error connecting to Controller")
+			}
+
+		log.Infof("Started Guard with id: " + id)
+		//keyInitMsg := MsgInit([]byte(id))
+		//log.Infof("Sending message: " + keyInitMsg)
+		updater.SendChan <- [][]byte{[]byte("Hello")}
+
+			if er != nil {
+				log.Infof("[ZMQ] Error sending message to Controller")
+			}*/
+
+	_, ero := net.Dial("tcp", "127.0.0.1:7777")
+	if ero != nil {
+		log.Infof("Unable to connect to Controller")
+		log.Infof(ero.Error())
+	}
+	log.Infof("Send KeyInitReq to controller")
 }
