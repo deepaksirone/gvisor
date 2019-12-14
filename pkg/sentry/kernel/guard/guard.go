@@ -3,9 +3,10 @@ package guard
 import (
 	//"fmt"
 	"encoding/json"
-	//zmq "github.com/deepaksirone/goczmq"
+	zmq "github.com/deepaksirone/goczmq"
+	//"github.com/grpc/grpc-go"
 	"gvisor.dev/gvisor/pkg/log"
-	"net"
+	//"net"
 	"os"
 	"strconv"
 	"strings"
@@ -307,36 +308,60 @@ func (g *Guard) CheckPolicy(event_id int) bool {
 	return false
 }
 
-func (g *Guard) Run(ch chan KernMsg) {
+func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
 	// Connect to the controller
 	id := get_func_name() + strconv.FormatInt(get_time(), 10)
 	log.Infof("Started Guard with id: " + id)
+
+	idOpt := zmq.SockSetIdentity(id)
+	updater := zmq.NewDealerChanneler("tcp://127.0.0.1:5000", idOpt)
+
 	/*
-		idOpt := zmq.SockSetIdentity(id)
-		updater := zmq.NewDealerChanneler("tcp://127.0.0.1:5000", idOpt)
+		if err != nil {
+			log.Infof("[ZMQ] Error attaching to Controller")
+		}*/
+	/*
+		e := updater.Connect("tcp://127.0.0.1:5000")
+		if e != nil {
+			log.Infof("Error connecting to Controller")
+		}*/
 
-			if err != nil {
-				log.Infof("[ZMQ] Error attaching to Controller")
-			}
+	log.Infof("Started Guard with id: " + id)
+	keyInitMsg := MsgInit([]byte(id))
+	//log.Infof("Sending message: " + keyInitMsg)
+	updater.SendChan <- [][]byte{keyInitMsg}
 
-			e := updater.Connect("tcp://127.0.0.1:5000")
-			if e != nil {
-				log.Infof("Error connecting to Controller")
-			}
-
-		log.Infof("Started Guard with id: " + id)
-		//keyInitMsg := MsgInit([]byte(id))
-		//log.Infof("Sending message: " + keyInitMsg)
-		updater.SendChan <- [][]byte{[]byte("Hello")}
-
-			if er != nil {
-				log.Infof("[ZMQ] Error sending message to Controller")
-			}*/
-
-	_, ero := net.Dial("tcp", "127.0.0.1:7777")
-	if ero != nil {
-		log.Infof("Unable to connect to Controller")
-		log.Infof(ero.Error())
-	}
+	/*
+		if er != nil {
+			log.Infof("[ZMQ] Error sending message to Controller")
+		}*/
+	/*
+		_, ero := net.Dial("tcp", "127.0.0.1:7777")
+		if ero != nil {
+			log.Infof("Unable to connect to Controller")
+			log.Infof(ero.Error())
+		}
+	*/
+	/*
+		conn, err := grpc.Dial("127.0.0.1:7777", grpc.WithInsecure(), grpc.WithBlock())
+		if err != nil {
+			log.Infof("[GRPC] Unable to connect to localhost")
+		}
+		defer conn.Close()
+		c := pb.NewGreeterClient(conn)
+	*/
 	log.Infof("Send KeyInitReq to controller")
+	for {
+		// Receive signal from kernel
+		// and break out of this loop
+		select {
+		case <-ch:
+			log.Infof("[Guard] Received a message from the kernel")
+
+		case <-ctr:
+			log.Infof("[Guard] Exiting the go routine")
+			break
+		}
+
+	}
 }

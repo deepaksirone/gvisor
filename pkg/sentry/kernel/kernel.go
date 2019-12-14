@@ -208,6 +208,9 @@ type Kernel struct {
 
 	//Guard channel
 	guardChan chan guard.KernMsg
+
+	//Controller Channel
+	guardCtrChan chan int
 }
 
 // InitKernelArgs holds arguments to Init.
@@ -303,6 +306,7 @@ func (k *Kernel) Init(args InitKernelArgs) error {
 	k.netlinkPorts = port.New()
 	k.guard = guard.New("127.0.0.1", 5000)
 	k.guardChan = make(chan guard.KernMsg)
+	k.guardCtrChan = make(chan int)
 
 	return nil
 }
@@ -845,13 +849,14 @@ func (k *Kernel) Start() error {
 		Period:  linux.ClockTick,
 	})
 
-	go k.guard.Run(k.guardChan)
 	// If k was created by LoadKernelFrom, timers were stopped during
 	// Kernel.SaveTo and need to be resumed. If k was created by NewKernel,
 	// this is a no-op.
 	k.resumeTimeLocked()
 	// Start task goroutines.
 	k.tasks.mu.RLock()
+	go k.guard.Run(k.guardChan, k.guardCtrChan)
+
 	defer k.tasks.mu.RUnlock()
 	for t, tid := range k.tasks.Root.tids {
 		t.Start(tid)
@@ -927,6 +932,7 @@ func (k *Kernel) resumeTimeLocked() {
 // WaitExited blocks until all tasks in k have exited.
 func (k *Kernel) WaitExited() {
 	k.tasks.liveGoroutines.Wait()
+	k.guardCtrChan <- 1 // Kill the guard after all tasks have exited
 }
 
 // Kill requests that all tasks in k immediately exit as if group exiting with

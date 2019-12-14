@@ -18,7 +18,7 @@
 package filter
 
 import (
-	"gvisor.dev/gvisor/pkg/seccomp"
+//"gvisor.dev/gvisor/pkg/seccomp"
 )
 
 // Install installs seccomp filters.
@@ -29,6 +29,6 @@ func Install() error {
 	// when not enabled.
 	s.Merge(instrumentationFilters())
 
-	return seccomp.Install(s)
-	//return nil
+	//return seccomp.Install(s)
+	return nil
 }

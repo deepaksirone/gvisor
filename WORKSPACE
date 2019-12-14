@@ -225,6 +225,13 @@ go_repository(
     importpath = "github.com/deepaksirone/goczmq",
     commit = "7f1d6442e00dd48b0f2f95ef48409d39112e2f1e",
 )
+
+#go_repository(
+#    name = "com_github_golang_grpc",
+#    importpath = "github.com/grpc/grpc-go",
+#    version = "v1.25.2",
+#)
+
 # System Call test dependencies.
 http_archive(
     name = "com_github_gflags_gflags",

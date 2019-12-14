@@ -210,7 +210,7 @@ func main() {
 		AlsoLogToStderr:    *alsoLogToStderr,
 		ReferenceLeakMode:  refsLeakMode,
 
-		TestOnlyAllowRunAsCurrentUserWithoutChroot: *testOnlyAllowRunAsCurrentUserWithoutChroot,
+		TestOnlyAllowRunAsCurrentUserWithoutChroot: true,
 	}
 	if len(*straceSyscalls) != 0 {
 		conf.StraceSyscalls = strings.Split(*straceSyscalls, ",")
@@ -275,7 +275,7 @@ func main() {
 	log.Infof("\t\tStrace: %t, max size: %d, syscalls: %s", conf.Strace, conf.StraceLogSize, conf.StraceSyscalls)
 	log.Infof("***************************")
 
-	if *testOnlyAllowRunAsCurrentUserWithoutChroot {
+	if true {
 		// SIGTERM is sent to all processes if a test exceeds its
 		// timeout and this case is handled by syscall_test_runner.
 		log.Warningf("Block the TERM signal. This is only safe in tests!")

@@ -13,6 +13,7 @@ go_library(
     visibility = ["//pkg/sentry:internal"],
     deps = [
 	"@com_github_zeromq_goczmq//:go_default_library",
+	#"@com_github_golang_grpc//:go_default_library",
 	"//pkg/log"
     ],
 )
