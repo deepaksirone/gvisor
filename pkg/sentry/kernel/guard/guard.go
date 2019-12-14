@@ -351,6 +351,9 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
 		c := pb.NewGreeterClient(conn)
 	*/
 	log.Infof("Send KeyInitReq to controller")
+	recv := <-updater.RecvChan
+	log.Infof("[Guard] Received: %s", string(recv[0]))
+
 	for {
 		// Receive signal from kernel
 		// and break out of this loop
