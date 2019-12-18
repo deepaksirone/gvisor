@@ -30,6 +30,7 @@ func Hypercall1(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.Sy
 	d := vma.ValuePtr().GetDeviceID()
 
 	t.Infof("Hypercall1: Mapped name of VMA: %s, Inode Number: %x, Device Number: %x", v, i, d)
+	t.Kernel().SendDummyGuard()
 	return 0, nil, nil
 }
 

@@ -310,6 +310,9 @@ func (k *Kernel) Init(args InitKernelArgs) error {
 
 	return nil
 }
+func (k *Kernel) SendDummyGuard() {
+	k.guardChan <- guard.KernMsg{}
+}
 
 // SaveTo saves the state of k to w.
 //
