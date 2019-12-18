@@ -4,6 +4,7 @@ import (
 	//"crypto/ecdsa"
 	//"crypto/elliptic"
 	"fmt"
+	"gvisor.dev/gvisor/pkg/log"
 	"strconv"
 )
 
@@ -124,7 +125,7 @@ func HeaderToStr(h Header) []byte {
 	var s []byte
 	s = append(s, h.typ)
 	s = append(s, h.action)
-	s = append(s, h.length[:]...)
+	s = append(s, h.length[:MAX_LEN_SIZE]...)
 	return s
 }
 
@@ -132,7 +133,7 @@ func StrToHeader(s []byte) Header {
 	var h Header
 	h.typ = s[0]
 	h.action = s[1]
-	copy(h.length[:], s[2:])
+	copy(h.length[:], s[2:10])
 	return h
 }
 
@@ -182,16 +183,22 @@ func MsgBasic(typ, action byte, msg_body []byte) []byte {
 	res = append(res, t_hdr_str[:]...)
 	res = append(res, msg_body[:]...)
 	res = append(res, hash[:]...)
+	//log.Infof("[Guard] Sending message with data: %v", res)
 	return res
 }
 
 func MsgParser(msg_str []byte) Msg {
 	var msg Msg
-	msg.header = StrToHeader(msg_str[:MSG_HDR_LEN+1])
+	msg.header = StrToHeader(msg_str[:MSG_HDR_LEN])
 	s := string(msg.header.length[:MAX_LEN_SIZE])
-	l, _ := strconv.ParseInt(s, 16, 32)
-
-	msg.body = append(msg.body, msg_str[MSG_HDR_LEN+1:MSG_HDR_LEN+1+int(l)]...)
-	copy(msg.signature[:], msg_str[MSG_HDR_LEN+int(l)+1:MSG_HDR_LEN+1+int(l)+MSG_SIG_LEN])
+	l, err := strconv.ParseInt(s, 16, 32)
+	if err != nil {
+		log.Infof("[Guard] Error parsing message header length")
+	}
+	log.Infof("[Guard] Message length is %d, slice length is %d", l, len(msg_str))
+	msg.body = append(msg.body, msg_str[MSG_HDR_LEN:MSG_HDR_LEN+int(l)]...)
+	if len(msg_str) >= MSG_HDR_LEN+int(l)+MSG_SIG_LEN {
+		copy(msg.signature[:], msg_str[MSG_HDR_LEN+int(l):MSG_HDR_LEN+int(l)+MSG_SIG_LEN])
+	}
 	return msg
 }

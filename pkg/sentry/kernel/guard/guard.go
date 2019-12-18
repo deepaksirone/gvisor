@@ -32,7 +32,7 @@ type Guard struct {
 	// Start time
 	startTime int64
 	// Running time
-	runningTime uint
+	runningTime uint64
 	// Event mapping table
 	eventMap map[int64]int
 	// State table
@@ -74,7 +74,7 @@ type KernMsg struct {
 
 func get_func_name() string {
 	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") == "" {
-		return "test0"
+		return string("test0")
 	}
 	return os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
 }
@@ -131,6 +131,13 @@ func New(ctrIP string, ctrPort int64) Guard {
 	g.runningTime = 0
 	g.ctrIP = ctrIP
 	g.ctrPort = ctrPort
+	g.eventMap = make(map[int64]int)
+	g.ioWhitelist = make(map[string]int)
+	g.ipWhitelist = make(map[string]int)
+	g.urlWhitelist = make(map[string]int)
+	g.stateTable = make(map[string]int)
+	g.policyTable = make(map[string]*ListNode)
+
 	return g
 }
 
@@ -155,16 +162,22 @@ func KeyInitReq(s *zmq.Sock, guard_id []byte) {
 	m := MsgInit(guard_id)
 	s.SendFrame(m, zmq.FlagNone)
 }
-
-func SendToCtr(s *zmq.Sock, typ, action byte, data []byte) {
-	m := MsgBasic(typ, action, data)
-	s.SendFrame(m, zmq.FlagNone)
-}
 */
+
+func keyInitHandler(msg []byte) {
+	return
+}
+
+func SendToCtr(s *zmq.Channeler, typ, action byte, data []byte) {
+	m := MsgBasic(typ, action, data)
+	s.SendChan <- [][]byte{m}
+}
+
 func (g *Guard) PolicyInitHandler(msg []byte) {
 	var f Policy
 	err := json.Unmarshal(msg, &f)
 	if err != nil {
+		log.Infof("[Guard] Error parsing json: %v", msg)
 		return
 	}
 	g.ior = int(f.IOR)
@@ -183,7 +196,7 @@ func (g *Guard) PolicyInitHandler(msg []byte) {
 
 	func_name := f.GRAPH["NAME"].(string)
 	eventid := f.GRAPH["EVENTID"].([]interface{})
-
+	log.Infof("[Guard] The eventid map : %v", eventid)
 	var eventid_map []map[string]int
 
 	for _, v := range eventid {
@@ -312,7 +325,7 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
 	// Connect to the controller
 	id := get_func_name() + strconv.FormatInt(get_time(), 10)
 	log.Infof("Started Guard with id: " + id)
-
+	fname := get_func_name()
 	idOpt := zmq.SockSetIdentity(id)
 	updater := zmq.NewDealerChanneler("tcp://127.0.0.1:5000", idOpt)
 
@@ -326,7 +339,7 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
 			log.Infof("Error connecting to Controller")
 		}*/
 
-	log.Infof("Started Guard with id: " + id)
+	log.Infof("[Guard] Started Guard with id: " + id)
 	keyInitMsg := MsgInit([]byte(id))
 	//log.Infof("Sending message: " + keyInitMsg)
 	updater.SendChan <- [][]byte{keyInitMsg}
@@ -350,9 +363,9 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
 		defer conn.Close()
 		c := pb.NewGreeterClient(conn)
 	*/
-	log.Infof("Send KeyInitReq to controller")
-	recv := <-updater.RecvChan
-	log.Infof("[Guard] Received: %s", string(recv[0]))
+	log.Infof("[Guard] Send KeyInitReq to controller " + fname)
+	//recv := <-updater.RecvChan
+	//log.Infof("[Guard] Received: %s", string(recv[0]))
 
 	for {
 		// Receive signal from kernel
@@ -364,6 +377,39 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
 		case <-ctr:
 			log.Infof("[Guard] Exiting the go routine")
 			break
+
+		case recv := <-updater.RecvChan:
+			msg := MsgParser(recv[0])
+			typ := msg.header.typ
+			action := msg.header.action
+			//msg.header.length[MAX_LEN_SIZE] = 0
+			_, err := strconv.ParseInt(string(msg.header.length[:MAX_LEN_SIZE]), 16, 64)
+			if err != nil {
+				log.Infof("[Guard] failed to parse message length: %s", string(msg.header.length[:]))
+			}
+			switch typ {
+			case TYPE_KEY_DIST:
+				keyInitHandler(msg.body)
+				log.Infof("[Guard] Registered Keys: " + fname)
+				SendToCtr(updater, TYPE_POLICY, ACTION_POLICY_INIT, []byte(fname))
+			case TYPE_POLICY:
+				if action == ACTION_POLICY_ADD {
+					g.PolicyInitHandler(msg.body)
+					log.Infof("[Guard] Finish registration; get policy")
+				}
+			case TYPE_CHECK_RESP:
+				log.Infof("[Guard] Get Check Resp")
+			case TYPE_CHECK_STATUS:
+				log.Infof("[Guard] Send status to guard")
+				g.runningTime = uint64(get_time() - g.startTime)
+				s := strconv.FormatInt(int64(g.requestNo), 10) + string(":") + strconv.FormatUint(g.runningTime, 10)
+				SendToCtr(updater, TYPE_CHECK_STATUS, ACTION_GD_RESP, []byte(s))
+			case TYPE_TEST:
+
+			default:
+
+			}
+
 		}
 
 	}
