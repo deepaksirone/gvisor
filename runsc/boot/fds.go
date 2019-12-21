@@ -71,7 +71,7 @@ func createFDTable(ctx context.Context, console bool, stdioFDs []int) (*kernel.F
 		}
 
 		// Add the file to the FD map.
-		if err := fdTable.NewFDAt(ctx, int32(appFD), appFile, kernel.FDFlags{}); err != nil {
+		if err := fdTable.NewFDAt(ctx, int32(appFD), appFile, kernel.FDFlags{}, false); err != nil {
 			return nil, err
 		}
 	}

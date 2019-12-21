@@ -40,16 +40,16 @@ func (f *FDTable) init() {
 // The boolean indicates whether this was in range.
 //
 //go:nosplit
-func (f *FDTable) get(fd int32) (*fs.File, FDFlags, bool) {
+func (f *FDTable) get(fd int32) (*fs.File, FDFlags, bool, bool) {
 	slice := *(*[]unsafe.Pointer)(atomic.LoadPointer(&f.slice))
 	if fd >= int32(len(slice)) {
-		return nil, FDFlags{}, false
+		return nil, FDFlags{}, false, false
 	}
 	d := (*descriptor)(atomic.LoadPointer(&slice[fd]))
 	if d == nil {
-		return nil, FDFlags{}, true
+		return nil, FDFlags{}, true, false
 	}
-	return d.file, d.flags, true
+	return d.file, d.flags, true, d.valid
 }
 
 // set sets an entry.
@@ -58,7 +58,7 @@ func (f *FDTable) get(fd int32) (*fs.File, FDFlags, bool) {
 // reference needed by the table iff the file is different.
 //
 // Precondition: mu must be held.
-func (f *FDTable) set(fd int32, file *fs.File, flags FDFlags) {
+func (f *FDTable) set(fd int32, file *fs.File, flags FDFlags, valid bool) {
 	slice := *(*[]unsafe.Pointer)(atomic.LoadPointer(&f.slice))
 
 	// Grow the table as required.
@@ -77,6 +77,7 @@ func (f *FDTable) set(fd int32, file *fs.File, flags FDFlags) {
 		d = &descriptor{
 			file:  file,
 			flags: flags,
+			valid: valid,
 		}
 	}
 

@@ -42,7 +42,7 @@ func walkDescriptors(t *kernel.Task, p string, toInode func(*fs.File, kernel.FDF
 	var fdFlags kernel.FDFlags
 	t.WithMuLocked(func(t *kernel.Task) {
 		if fdTable := t.FDTable(); fdTable != nil {
-			file, fdFlags = fdTable.Get(int32(n))
+			file, fdFlags, _ = fdTable.Get(int32(n))
 		}
 	})
 	if file == nil {
