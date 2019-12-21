@@ -7,9 +7,19 @@ import (
 )
 
 func Hypercall1(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.SyscallControl, error) {
+	fd := args[0].Int()
 	ip := usermem.Addr(t.Arch().IP())
 	ar, err := ip.RoundDown().ToRange(usermem.PageSize)
+	valid := t.GetValid(fd)
 	t.Infof("Hypercall1: The current IP value is %x", ip)
+	t.Infof("Hypercall1: The current valid bit for fd: %v is %v", fd, valid)
+	if err := t.FDTable().SetValid(fd, true); err == nil {
+		t.Infof("Hypercall1: Validated descriptor %v", fd)
+	} else {
+		t.Infof("Hypercall1: Unable to validate descriptor %v", fd)
+	}
+
+	t.Infof("Hypercall1: The new valid bit: %v", t.GetValid(fd))
 
 	if err == false {
 		t.Infof("Hypercall1 Failed to get Range")

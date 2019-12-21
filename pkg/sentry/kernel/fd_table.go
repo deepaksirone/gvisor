@@ -294,6 +294,27 @@ func (f *FDTable) SetFlags(fd int32, flags FDFlags) error {
 	return nil
 }
 
+// SetValid sets the valid bit for the given file descriptor.
+func (f *FDTable) SetValid(fd int32, valid bool) error {
+	if fd < 0 {
+		// Don't accept negative FDs.
+		return syscall.EBADF
+	}
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	file, flags, _, _ := f.get(fd)
+	if file == nil {
+		// No file found.
+		return syscall.EBADF
+	}
+
+	// Update the flags.
+	f.set(fd, file, flags, valid)
+	return nil
+}
+
 // Get returns a reference to the file and the flags for the FD or nil if no
 // file is defined for the given fd.
 //

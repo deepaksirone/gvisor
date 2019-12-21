@@ -710,7 +710,8 @@ func (t *Task) GetFile(fd int32) *fs.File {
 }
 
 func (t *Task) GetValid(fd int32) bool {
-	_, _, valid := t.fdTable.Get(fd)
+	file, _, valid := t.fdTable.Get(fd)
+	file.DecRef()
 	return valid
 }
 

@@ -825,6 +825,7 @@ func Dup3(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.SyscallC
 	if oldFile == nil {
 		return 0, nil, syserror.EBADF
 	}
+	//defer oldFile.DecRef()
 	defer oldFile.DecRef()
 
 	err := t.NewFDAt(newfd, oldFile, kernel.FDFlags{CloseOnExec: flags&linux.O_CLOEXEC != 0}, valid)
