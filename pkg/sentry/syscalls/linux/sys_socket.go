@@ -25,6 +25,7 @@ import (
 	ktime "gvisor.dev/gvisor/pkg/sentry/kernel/time"
 	"gvisor.dev/gvisor/pkg/sentry/socket"
 	"gvisor.dev/gvisor/pkg/sentry/socket/control"
+	"gvisor.dev/gvisor/pkg/sentry/socket/hostinet"
 	"gvisor.dev/gvisor/pkg/sentry/socket/unix/transport"
 	"gvisor.dev/gvisor/pkg/sentry/usermem"
 	"gvisor.dev/gvisor/pkg/syserr"
@@ -203,6 +204,15 @@ func Socket(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.Syscal
 	})
 	if err != nil {
 		return 0, nil, err
+	}
+
+	hs, er := s.FileOperations.(socket.Socket)
+	if er {
+		skt, e1 := hs.(*hostinet.SocketOperations)
+		if e1 {
+			t.Infof("[Socket] Setting gVisor FD")
+			skt.GvisorFD = fd
+		}
 	}
 
 	return uintptr(fd), nil, nil
