@@ -459,11 +459,11 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 // SendMsg implements socket.Socket.SendMsg.
 func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []byte, flags int, haveDeadline bool, deadline ktime.Time, controlMessages socket.ControlMessages) (int, *syserr.Error) {
 	// Whitelist flags.
-	valid := t.GetValid(int32(s.GvisorFD))
+	/*valid := t.GetValid(int32(s.GvisorFD))
 	if !valid {
 		t.Infof("[SendMsg] Invalid fd %v", s.GvisorFD)
 		return -1, syserr.FromError(syserror.EPERM)
-	}
+	}*/
 	if flags&^(syscall.MSG_DONTWAIT|syscall.MSG_EOR|syscall.MSG_FASTOPEN|syscall.MSG_MORE|syscall.MSG_NOSIGNAL) != 0 {
 		return 0, syserr.ErrInvalidArgument
 	}

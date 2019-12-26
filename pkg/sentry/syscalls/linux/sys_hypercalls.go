@@ -44,20 +44,36 @@ func Hypercall1(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.Sy
 	return 0, nil, nil
 }
 
-/*
 // args[0] = fd; args[1] = hostname ptr; args[2] = payload ptr
 // Assuming the payload contains plaintext HTTP data
-func ValidateDescriptor(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.SyscallControl, error) {
+func ValidateSSLSend(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.SyscallControl, error) {
 	fd := args[0].Int()
 	hostname_ptr := args[1].Pointer()
-	payload_ptr := args[2].Pointer()
+	ip_ptr := args[2].Pointer()
+	//port := args[2].Int()
+	//has_body := args[3].Int()
+	session_id_ptr := args[3].Pointer()
+	data_ptr := args[4].Pointer()
+	data_len := args[5].SizeT()
 
 	// Max hostname length is 255 for now
-	hostname := t.CopyInString(addr, linux.NAME_MAX)
+	hostname, _ := t.CopyInString(hostname_ptr, 255)
 	if hostname == "" {
 		return 0, nil, nil
 	}
 
-	// Need to write protect the payload ptr address range
+	ip, _ := t.CopyInString(ip_ptr, 16)
 
-}*/
+	session_id, _ := t.CopyInString(session_id_ptr, 255)
+	data_slice := make([]byte, int(data_len))
+	src, _ := t.SingleIOSequence(data_ptr, int(data_len), usermem.IOOpts{
+		AddressSpaceActive: true,
+	})
+	src.Reader(t).Read(data_slice)
+
+	t.Infof("[ValidateSSLSend] fd: %v, hostname: %v, ip: %v, session_id: %v, data: %v", fd, hostname, ip, session_id,
+		data_slice)
+
+	// Need to write protect the payload ptr address range
+	return 0, nil, nil
+}
