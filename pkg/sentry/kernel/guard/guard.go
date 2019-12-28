@@ -1,8 +1,8 @@
 package guard
 
 import (
-	//"fmt"
 	"encoding/json"
+	"fmt"
 	zmq "github.com/deepaksirone/goczmq"
 	//"github.com/grpc/grpc-go"
 	"gvisor.dev/gvisor/pkg/log"
@@ -68,8 +68,10 @@ type Policy struct {
 }
 
 type KernMsg struct {
-	eventName [4]byte
-	jsonData  []byte
+	EventName [4]byte
+	MetaData  []byte
+	Data      []byte
+	RecvChan  chan int
 }
 
 func get_func_name() string {
@@ -84,6 +86,10 @@ func get_region_name() string {
 		return "AWS_EAST"
 	}
 	return os.Getenv("AWS_REGION")
+}
+
+func get_inst_id() []byte {
+	return []byte("instid0")
 }
 
 func split_str(s, sep string) []string {
@@ -328,7 +334,7 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
 	fname := get_func_name()
 	idOpt := zmq.SockSetIdentity(id)
 	updater := zmq.NewDealerChanneler("tcp://127.0.0.1:5000", idOpt)
-
+	rid := get_inst_id()
 	/*
 		if err != nil {
 			log.Infof("[ZMQ] Error attaching to Controller")
@@ -371,14 +377,66 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
 		// Receive signal from kernel
 		// and break out of this loop
 		select {
-		case <-ch:
+		case msg := <-ch:
 			log.Infof("[Guard] Received a message from the kernel")
+			log.Infof("[Guard] The message struct : %v", msg)
+			g.requestNo += 1
+			replied := false
+			/*
+				if len(msg.Data) == 0 {
+					//msg.RecvChan <- 0 // [TODO] Respond with appropriate error
+					continue
+				}*/
+			event := string(msg.EventName[:])
+			if event == "CHCK" {
+				SendToCtr(updater, TYPE_CHECK_STATUS, ACTION_NOOP, []byte(fname))
+				msg.RecvChan <- 1 //[TODO] Need to augment this structure
+				replied = true
+				continue
+			}
+
+			meta := string(msg.MetaData)
+			out := fmt.Sprintf("%s:%s:%s:%s", fname, event, meta, string(rid))
+			log.Infof("[Guard] Out string: %s", out)
+
+			info := strings.Split(meta, ":")
+			ev_hash := djb2hash(fname, event, info[0], info[1])
+			ev_id, present := g.get_event_id(int64(ev_hash))
+
+			if event == "GETE" {
+				SendToCtr(updater, TYPE_CHECK_EVENT, ACTION_NOOP, []byte(out))
+				msg.RecvChan <- 1
+				replied = true
+			} else if event == "ENDE" {
+				g.PolicyInit()
+				msg.RecvChan <- 1 // [TODO] Send an empty message to the hypercall
+				replied = true
+				SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
+			} else if event == "SEND" || event == "RECV" {
+				if present && g.CheckPolicy(ev_id) {
+					msg.RecvChan <- 1
+					SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
+				} else {
+
+					log.Infof("[Guard] Event: %v not present or not allowed by policy", ev_id)
+					msg.RecvChan <- 0
+					SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
+				}
+				replied = true
+			}
+
+			if !replied {
+				msg.RecvChan <- 0 //[TODO] Invalid message!
+			}
 
 		case <-ctr:
 			log.Infof("[Guard] Exiting the go routine")
 			break
 
 		case recv := <-updater.RecvChan:
+			if len(recv[0]) <= 1 {
+				continue
+			}
 			msg := MsgParser(recv[0])
 			typ := msg.header.typ
 			action := msg.header.action

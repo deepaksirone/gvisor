@@ -1,9 +1,11 @@
 package linux
 
 import (
+	"fmt"
 	"gvisor.dev/gvisor/pkg/sentry/arch"
 	"gvisor.dev/gvisor/pkg/sentry/kernel"
 	"gvisor.dev/gvisor/pkg/sentry/usermem"
+	"strings"
 )
 
 func Hypercall1(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.SyscallControl, error) {
@@ -40,7 +42,7 @@ func Hypercall1(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.Sy
 	d := vma.ValuePtr().GetDeviceID()
 
 	t.Infof("Hypercall1: Mapped name of VMA: %s, Inode Number: %x, Device Number: %x", v, i, d)
-	t.Kernel().SendDummyGuard()
+	//t.Kernel().SendDummyGuard()
 	return 0, nil, nil
 }
 
@@ -62,17 +64,44 @@ func ValidateSSLSend(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kern
 		return 0, nil, nil
 	}
 
-	ip, _ := t.CopyInString(ip_ptr, 16)
+	ip, _ := t.CopyInString(ip_ptr, 22)
+	split := strings.Split(ip, ":")
+	ip = split[0]
+	port := split[1]
 
 	session_id, _ := t.CopyInString(session_id_ptr, 255)
 	data_slice := make([]byte, int(data_len))
+	//data_s, _ := t.CopyInString(data_ptr, int(data_len))
+
 	src, _ := t.SingleIOSequence(data_ptr, int(data_len), usermem.IOOpts{
 		AddressSpaceActive: true,
 	})
 	src.Reader(t).Read(data_slice)
 
-	t.Infof("[ValidateSSLSend] fd: %v, hostname: %v, ip: %v, session_id: %v, data: %v", fd, hostname, ip, session_id,
-		data_slice)
+	data_str := string(data_slice)
+
+	t.Infof("[ValidateSSLSend] fd: %v, hostname: %v, ip: %v, session_id: %v, data: %s, data", fd, hostname, ip, session_id,
+		data_str)
+
+	method := strings.Split(data_str, " ")[0]
+	url := ""
+	has_body := 0
+
+	if method == "POST" {
+		tmp := strings.Split(data_str, "\r\n")[0]
+		url = strings.Split(strings.TrimSpace(tmp), " ")[1]
+		has_body = 1
+	} else if method == "GET" {
+		t.Infof("[ValidateSSLSend] GET encountered!")
+	}
+
+	meta_str := fmt.Sprintf("%s:%s:%s:%s:%d:%s", hostname+url, method, ip, port, has_body, session_id)
+	t.Infof("[ValidateSSLSend] The meta str: %s", meta_str)
+	if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, data_slice); r == 1 {
+		t.Infof("[ValidateSSLSend] Guard allowed the action")
+	} else {
+		t.Infof("[ValidateSSLSend] Guard disallowed action")
+	}
 
 	// Need to write protect the payload ptr address range
 	return 0, nil, nil

@@ -310,8 +310,27 @@ func (k *Kernel) Init(args InitKernelArgs) error {
 
 	return nil
 }
+
 func (k *Kernel) SendDummyGuard() {
 	k.guardChan <- guard.KernMsg{}
+}
+
+func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte) int {
+	var msg guard.KernMsg
+	recvChan := make(chan int)
+
+	copy(msg.EventName[:], event_name)
+	msg.MetaData = []byte(meta_str)
+	msg.Data = make([]byte, len(data))
+	copy(msg.Data[:], data)
+	msg.RecvChan = recvChan
+
+	k.guardChan <- msg
+	log.Infof("[Kernel] waiting for Guard response!")
+	recv := <-recvChan
+	log.Infof("[Kernel] received Guard response!")
+
+	return recv
 }
 
 // SaveTo saves the state of k to w.
