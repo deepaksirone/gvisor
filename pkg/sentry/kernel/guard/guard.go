@@ -400,6 +400,7 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
 			log.Infof("[Guard] Out string: %s", out)
 
 			info := strings.Split(meta, ":")
+			log.Infof("[Guard] info[0]: %v, info[1]: %v", info[0], info[1])
 			ev_hash := djb2hash(fname, event, info[0], info[1])
 			ev_id, present := g.get_event_id(int64(ev_hash))
 
