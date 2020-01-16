@@ -878,7 +878,8 @@ func (k *Kernel) Start() error {
 	// Start task goroutines.
 	k.tasks.mu.RLock()
 	go k.guard.Run(k.guardChan, k.guardCtrChan)
-
+	//k.guard.SendKeyInitReq()
+	//<-k.guardCtrChan
 	defer k.tasks.mu.RUnlock()
 	for t, tid := range k.tasks.Root.tids {
 		t.Start(tid)

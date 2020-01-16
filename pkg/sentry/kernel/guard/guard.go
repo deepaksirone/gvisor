@@ -327,6 +327,18 @@ func (g *Guard) CheckPolicy(event_id int) bool {
 	return false
 }
 
+func (g *Guard) SendKeyInitReq() (string, *zmq.Channeler) {
+	id := get_func_name() + strconv.FormatInt(get_time(), 10)
+	log.Infof("[Guard] SendKeyInitReq starting")
+	idOpt := zmq.SockSetIdentity(id)
+	updater := zmq.NewDealerChanneler("tcp://127.0.0.1:5000", idOpt)
+	keyInitMsg := MsgInit([]byte(id))
+	updater.SendChan <- [][]byte{keyInitMsg}
+	<-updater.RecvChan
+
+	return id, updater
+}
+
 func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
 	// Connect to the controller
 	id := get_func_name() + strconv.FormatInt(get_time(), 10)
@@ -455,6 +467,7 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
 				if action == ACTION_POLICY_ADD {
 					g.PolicyInitHandler(msg.body)
 					log.Infof("[Guard] Finish registration; get policy")
+					//ctr <- 1
 				}
 			case TYPE_CHECK_RESP:
 				log.Infof("[Guard] Get Check Resp")
