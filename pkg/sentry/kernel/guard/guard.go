@@ -415,7 +415,6 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
 			log.Infof("[Guard] info[0]: %v, info[1]: %v", info[0], info[1])
 			ev_hash := djb2hash(fname, event, info[0], info[1])
 			ev_id, present := g.get_event_id(int64(ev_hash))
-
 			if event == "GETE" {
 				SendToCtr(updater, TYPE_CHECK_EVENT, ACTION_NOOP, []byte(out))
 				msg.RecvChan <- 1
@@ -425,7 +424,7 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
 				msg.RecvChan <- 1 // [TODO] Send an empty message to the hypercall
 				replied = true
 				SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
-			} else if event == "SEND" || event == "RECV" {
+			} else if event == "SEND" || event == "RESP" {
 				if present && g.CheckPolicy(ev_id) {
 					msg.RecvChan <- 1
 					SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
