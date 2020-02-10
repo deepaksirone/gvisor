@@ -345,7 +345,7 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
 	log.Infof("Started Guard with id: " + id)
 	fname := get_func_name()
 	idOpt := zmq.SockSetIdentity(id)
-	updater := zmq.NewDealerChanneler("tcp://127.0.0.1:5000", idOpt)
+	updater := zmq.NewDealerChanneler("tcp://node4.kubernetes.cs799-serverless-pg0.wisc.cloudlab.us:5000", idOpt)
 	rid := get_inst_id()
 	/*
 		if err != nil {
