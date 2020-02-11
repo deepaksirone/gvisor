@@ -131,11 +131,12 @@ func (s *SocketOperations) Read(ctx context.Context, _ *fs.File, dst usermem.IOS
 func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IOSequence, _ int64) (int64, error) {
 	t := ctx.(*kernel.Task)
 	t.Infof("[Write] Socket write called! on fd %v, gVisor fd %v", int32(s.fd), s.GvisorFD)
-	valid := t.GetValid(int32(s.GvisorFD))
-	if !valid {
-		t.Infof("[Write] Invalidated socket fd")
-		return -1, syserror.EPERM
-	}
+	//valid := t.GetValid(int32(s.GvisorFD))
+	/*
+		if !valid {
+			t.Infof("[Write] Invalidated socket fd")
+			return -1, syserror.EPERM
+		}*/
 
 	n, err := src.CopyInTo(ctx, safemem.WriterFunc(func(srcs safemem.BlockSeq) (uint64, error) {
 		// Refuse to do anything if any part of src.Addrs was unusable.
@@ -459,11 +460,12 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 // SendMsg implements socket.Socket.SendMsg.
 func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []byte, flags int, haveDeadline bool, deadline ktime.Time, controlMessages socket.ControlMessages) (int, *syserr.Error) {
 	// Whitelist flags.
-	valid := t.GetValid(int32(s.GvisorFD))
-	if !valid {
-		t.Infof("[SendMsg] Invalid fd %v", s.GvisorFD)
-		return -1, syserr.FromError(syserror.EPERM)
-	}
+	//valid := t.GetValid(int32(s.GvisorFD))
+	/*
+		if !valid {
+			t.Infof("[SendMsg] Invalid fd %v", s.GvisorFD)
+			return -1, syserr.FromError(syserror.EPERM)
+		}*/
 	if flags&^(syscall.MSG_DONTWAIT|syscall.MSG_EOR|syscall.MSG_FASTOPEN|syscall.MSG_MORE|syscall.MSG_NOSIGNAL) != 0 {
 		return 0, syserr.ErrInvalidArgument
 	}
