@@ -219,7 +219,7 @@ func (proc *Proc) execAsync(args *ExecArgs) (*kernel.ThreadGroup, kernel.ThreadI
 		}
 
 		// Add the file to the FD map.
-		if err := fdTable.NewFDAt(ctx, int32(appFD), appFile, kernel.FDFlags{}); err != nil {
+		if err := fdTable.NewFDAt(ctx, int32(appFD), appFile, kernel.FDFlags{}, false); err != nil {
 			return nil, 0, nil, err
 		}
 	}

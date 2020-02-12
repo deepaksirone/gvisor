@@ -740,7 +740,7 @@ func (t *Task) FDTable() *FDTable {
 //
 // Precondition: same as FDTable.Get.
 func (t *Task) GetFile(fd int32) *fs.File {
-	f, _ := t.fdTable.Get(fd)
+	f, _, _ := t.fdTable.Get(fd)
 	return f
 }
 
@@ -750,6 +750,12 @@ func (t *Task) GetFile(fd int32) *fs.File {
 func (t *Task) GetFileVFS2(fd int32) *vfs.FileDescription {
 	f, _ := t.fdTable.GetVFS2(fd)
 	return f
+}
+
+func (t *Task) GetValid(fd int32) bool {
+	file, _, valid := t.fdTable.Get(fd)
+	file.DecRef()
+	return valid
 }
 
 // NewFDs is a convenience wrapper for t.FDTable().NewFDs.
@@ -779,8 +785,8 @@ func (t *Task) NewFDFrom(fd int32, file *fs.File, flags FDFlags) (int32, error) 
 // This automatically passes the task as the context.
 //
 // Precondition: same as FDTable.
-func (t *Task) NewFDAt(fd int32, file *fs.File, flags FDFlags) error {
-	return t.fdTable.NewFDAt(t, fd, file, flags)
+func (t *Task) NewFDAt(fd int32, file *fs.File, flags FDFlags, valid bool) error {
+	return t.fdTable.NewFDAt(t, fd, file, flags, valid)
 }
 
 // WithMuLocked executes f with t.mu locked.

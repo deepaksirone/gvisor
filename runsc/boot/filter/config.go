@@ -55,7 +55,7 @@ var allowedSyscalls = seccomp.SyscallRules{
 			seccomp.AllowAny{},
 			seccomp.AllowAny{},
 			seccomp.AllowAny{},
-			seccomp.AllowValue(0),
+			seccomp.AllowAny{},
 		},
 	},
 	syscall.SYS_EVENTFD2: []seccomp.Rule{
@@ -113,28 +113,35 @@ var allowedSyscalls = seccomp.SyscallRules{
 	},
 	syscall.SYS_GETPID: {},
 	unix.SYS_GETRANDOM: {},
-	syscall.SYS_GETSOCKOPT: []seccomp.Rule{
-		{
-			seccomp.AllowAny{},
-			seccomp.AllowValue(syscall.SOL_SOCKET),
-			seccomp.AllowValue(syscall.SO_DOMAIN),
+	/*
+		syscall.SYS_GETSOCKOPT: []seccomp.Rule{
+			{
+				seccomp.AllowAny{},
+				seccomp.AllowValue(syscall.SOL_SOCKET),
+				seccomp.AllowValue(syscall.SO_DOMAIN),
+			},
+			{
+				seccomp.AllowAny{},
+				seccomp.AllowValue(syscall.SOL_SOCKET),
+				seccomp.AllowValue(syscall.SO_TYPE),
+			},
+			{
+				seccomp.AllowAny{},
+				seccomp.AllowValue(syscall.SOL_SOCKET),
+				seccomp.AllowValue(syscall.SO_ERROR),
+			},
+			{
+				seccomp.AllowAny{},
+				seccomp.AllowValue(syscall.SOL_SOCKET),
+				seccomp.AllowValue(syscall.SO_SNDBUF),
+			},
+			{
+				seccomp.AllowAny{},
+				seccomp.AllowValue(syscall.SOL_SOCKET),
+				seccomp.AllowValue(syscall.SO_REUSEADDR),
+			},
 		},
-		{
-			seccomp.AllowAny{},
-			seccomp.AllowValue(syscall.SOL_SOCKET),
-			seccomp.AllowValue(syscall.SO_TYPE),
-		},
-		{
-			seccomp.AllowAny{},
-			seccomp.AllowValue(syscall.SOL_SOCKET),
-			seccomp.AllowValue(syscall.SO_ERROR),
-		},
-		{
-			seccomp.AllowAny{},
-			seccomp.AllowValue(syscall.SOL_SOCKET),
-			seccomp.AllowValue(syscall.SO_SNDBUF),
-		},
-	},
+	*/
 	syscall.SYS_GETTID:       {},
 	syscall.SYS_GETTIMEOFDAY: {},
 	// SYS_IOCTL is needed for terminal support, but we only allow
@@ -304,6 +311,11 @@ var allowedSyscalls = seccomp.SyscallRules{
 			seccomp.AllowValue(3),
 		},
 	},
+
+	syscall.SYS_SOCKET:     {},
+	syscall.SYS_SETSOCKOPT: {},
+	syscall.SYS_CONNECT:    {},
+	syscall.SYS_GETSOCKOPT: {},
 }
 
 // hostInetFilters contains syscalls that are needed by sentry/socket/hostinet.

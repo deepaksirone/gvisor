@@ -41,9 +41,9 @@ func (f *FDTable) init() {
 // The boolean indicates whether this was in range.
 //
 //go:nosplit
-func (f *FDTable) get(fd int32) (*fs.File, FDFlags, bool) {
-	file, _, flags, ok := f.getAll(fd)
-	return file, flags, ok
+func (f *FDTable) get(fd int32) (*fs.File, FDFlags, bool, bool) {
+	file, _, flags, ok, valid := f.getAll(fd)
+	return file, flags, ok, valid
 }
 
 // getVFS2 gets a file entry.
@@ -51,9 +51,9 @@ func (f *FDTable) get(fd int32) (*fs.File, FDFlags, bool) {
 // The boolean indicates whether this was in range.
 //
 //go:nosplit
-func (f *FDTable) getVFS2(fd int32) (*vfs.FileDescription, FDFlags, bool) {
-	_, file, flags, ok := f.getAll(fd)
-	return file, flags, ok
+func (f *FDTable) getVFS2(fd int32) (*vfs.FileDescription, FDFlags, bool, bool) {
+	_, file, flags, ok, valid := f.getAll(fd)
+	return file, flags, ok, valid
 }
 
 // getAll gets a file entry.
@@ -61,19 +61,19 @@ func (f *FDTable) getVFS2(fd int32) (*vfs.FileDescription, FDFlags, bool) {
 // The boolean indicates whether this was in range.
 //
 //go:nosplit
-func (f *FDTable) getAll(fd int32) (*fs.File, *vfs.FileDescription, FDFlags, bool) {
+func (f *FDTable) getAll(fd int32) (*fs.File, *vfs.FileDescription, FDFlags, bool, bool) {
 	slice := *(*[]unsafe.Pointer)(atomic.LoadPointer(&f.slice))
 	if fd >= int32(len(slice)) {
-		return nil, nil, FDFlags{}, false
+		return nil, nil, FDFlags{}, false, false
 	}
 	d := (*descriptor)(atomic.LoadPointer(&slice[fd]))
 	if d == nil {
-		return nil, nil, FDFlags{}, true
+		return nil, nil, FDFlags{}, true, false
 	}
 	if d.file != nil && d.fileVFS2 != nil {
 		panic("VFS1 and VFS2 files set")
 	}
-	return d.file, d.fileVFS2, d.flags, true
+	return d.file, d.fileVFS2, d.flags, true, d.valid
 }
 
 // set sets an entry.
@@ -82,8 +82,8 @@ func (f *FDTable) getAll(fd int32) (*fs.File, *vfs.FileDescription, FDFlags, boo
 // reference needed by the table iff the file is different.
 //
 // Precondition: mu must be held.
-func (f *FDTable) set(fd int32, file *fs.File, flags FDFlags) {
-	f.setAll(fd, file, nil, flags)
+func (f *FDTable) set(fd int32, file *fs.File, flags FDFlags, valid bool) {
+	f.setAll(fd, file, nil, flags, valid)
 }
 
 // setVFS2 sets an entry.
@@ -92,8 +92,8 @@ func (f *FDTable) set(fd int32, file *fs.File, flags FDFlags) {
 // reference needed by the table iff the file is different.
 //
 // Precondition: mu must be held.
-func (f *FDTable) setVFS2(fd int32, file *vfs.FileDescription, flags FDFlags) {
-	f.setAll(fd, nil, file, flags)
+func (f *FDTable) setVFS2(fd int32, file *vfs.FileDescription, flags FDFlags, valid bool) {
+	f.setAll(fd, nil, file, flags, valid)
 }
 
 // setAll sets an entry.
@@ -102,7 +102,7 @@ func (f *FDTable) setVFS2(fd int32, file *vfs.FileDescription, flags FDFlags) {
 // reference needed by the table iff the file is different.
 //
 // Precondition: mu must be held.
-func (f *FDTable) setAll(fd int32, file *fs.File, fileVFS2 *vfs.FileDescription, flags FDFlags) {
+func (f *FDTable) setAll(fd int32, file *fs.File, fileVFS2 *vfs.FileDescription, flags FDFlags, valid bool) {
 	if file != nil && fileVFS2 != nil {
 		panic("VFS1 and VFS2 files set")
 	}
@@ -125,6 +125,7 @@ func (f *FDTable) setAll(fd int32, file *fs.File, fileVFS2 *vfs.FileDescription,
 			file:     file,
 			fileVFS2: fileVFS2,
 			flags:    flags,
+			valid:    valid,
 		}
 	}
 

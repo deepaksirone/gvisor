@@ -15,6 +15,6 @@
 package hostinet
 
 // beforeSave is invoked by stateify.
-func (*socketOperations) beforeSave() {
-	panic("host.socketOperations is not savable")
+func (*SocketOperations) beforeSave() {
+	panic("host.SocketOperations is not savable")
 }

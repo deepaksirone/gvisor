@@ -246,12 +246,15 @@ func (b *Boot) Execute(_ context.Context, f *flag.FlagSet, args ...interface{}) 
 	l.WaitForStartSignal()
 
 	// Run the application and wait for it to finish.
+	log.Infof("[Loader] Running in the sandbox")
 	if err := l.Run(); err != nil {
 		l.Destroy()
 		Fatalf("running sandbox: %v", err)
 	}
-
+	log.Infof("[Loader] Begin wait")
 	ws := l.WaitExit()
+	log.Infof("[Loader] Finish wait")
+
 	log.Infof("application exiting with %+v", ws)
 	waitStatus := args[1].(*syscall.WaitStatus)
 	*waitStatus = syscall.WaitStatus(ws.Status())

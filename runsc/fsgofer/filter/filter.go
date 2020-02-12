@@ -18,7 +18,7 @@
 package filter
 
 import (
-	"gvisor.dev/gvisor/pkg/seccomp"
+//"gvisor.dev/gvisor/pkg/seccomp"
 )
 
 // Install installs seccomp filters.
@@ -27,7 +27,8 @@ func Install() error {
 	// when not enabled.
 	allowedSyscalls.Merge(instrumentationFilters())
 
-	return seccomp.Install(allowedSyscalls)
+	//return seccomp.Install(allowedSyscalls)
+	return nil
 }
 
 // InstallUDSFilters extends the allowed syscalls to include those necessary for

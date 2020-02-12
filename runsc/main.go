@@ -66,10 +66,10 @@ var (
 	straceLogSize  = flag.Uint("strace-log-size", 1024, "default size (in bytes) to log data argument blobs.")
 
 	// Flags that control sandbox runtime behavior.
-	platformName       = flag.String("platform", "ptrace", "specifies which platform to use: ptrace (default), kvm.")
-	network            = flag.String("network", "sandbox", "specifies which network to use: sandbox (default), host, none. Using network inside the sandbox is more secure because it's isolated from the host network.")
 	hardwareGSO        = flag.Bool("gso", true, "enable hardware segmentation offload if it is supported by a network device.")
 	softwareGSO        = flag.Bool("software-gso", true, "enable software segmentation offload when hardware ofload can't be enabled.")
+	platformName       = flag.String("platform", "ptrace", "specifies which platform to use: ptrace (default), kvm")
+	network            = flag.String("network", "host", "specifies which network to use: sandbox (default), host, none. Using network inside the sandbox is more secure because it's isolated from the host network.")
 	fileAccess         = flag.String("file-access", "exclusive", "specifies which filesystem to use for the root mount: exclusive (default), shared. Volume mounts are always shared.")
 	fsGoferHostUDS     = flag.Bool("fsgofer-host-uds", false, "allow the gofer to mount Unix Domain Sockets.")
 	overlay            = flag.Bool("overlay", false, "wrap filesystem mounts with writable overlay. All modifications are stored in memory inside the sandbox.")
@@ -175,7 +175,7 @@ func main() {
 		cmd.Fatalf("overlay flag is incompatible with shared file access")
 	}
 
-	netType, err := boot.MakeNetworkType(*network)
+	netType, err := boot.MakeNetworkType("host")
 	if err != nil {
 		cmd.Fatalf("%v", err)
 	}
@@ -227,8 +227,8 @@ func main() {
 		OverlayfsStaleRead: *overlayfsStaleRead,
 		CPUNumFromQuota:    *cpuNumFromQuota,
 
-		TestOnlyAllowRunAsCurrentUserWithoutChroot: *testOnlyAllowRunAsCurrentUserWithoutChroot,
 		TestOnlyTestNameEnv:                        *testOnlyTestNameEnv,
+		TestOnlyAllowRunAsCurrentUserWithoutChroot: true,
 	}
 	if len(*straceSyscalls) != 0 {
 		conf.StraceSyscalls = strings.Split(*straceSyscalls, ",")
@@ -305,7 +305,7 @@ func main() {
 	log.Infof("\t\tStrace: %t, max size: %d, syscalls: %s", conf.Strace, conf.StraceLogSize, conf.StraceSyscalls)
 	log.Infof("***************************")
 
-	if *testOnlyAllowRunAsCurrentUserWithoutChroot {
+	if true {
 		// SIGTERM is sent to all processes if a test exceeds its
 		// timeout and this case is handled by syscall_test_runner.
 		log.Warningf("Block the TERM signal. This is only safe in tests!")

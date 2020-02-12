@@ -827,12 +827,14 @@ func Dup3(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.SyscallC
 	}
 
 	oldFile := t.GetFile(oldfd)
+	valid := t.GetValid(oldfd)
 	if oldFile == nil {
 		return 0, nil, syserror.EBADF
 	}
+	//defer oldFile.DecRef()
 	defer oldFile.DecRef()
 
-	err := t.NewFDAt(newfd, oldFile, kernel.FDFlags{CloseOnExec: flags&linux.O_CLOEXEC != 0})
+	err := t.NewFDAt(newfd, oldFile, kernel.FDFlags{CloseOnExec: flags&linux.O_CLOEXEC != 0}, valid)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -895,7 +897,7 @@ func Fcntl(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.Syscall
 	fd := args[0].Int()
 	cmd := args[1].Int()
 
-	file, flags := t.FDTable().Get(fd)
+	file, flags, _ := t.FDTable().Get(fd)
 	if file == nil {
 		return 0, nil, syserror.EBADF
 	}

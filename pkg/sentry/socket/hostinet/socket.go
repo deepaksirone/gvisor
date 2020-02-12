@@ -49,9 +49,9 @@ const (
 	maxControlLen = 1024
 )
 
-// socketOperations implements fs.FileOperations and socket.Socket for a socket
+// SocketOperations implements fs.FileOperations and socket.Socket for a socket
 // implemented using a host socket.
-type socketOperations struct {
+type SocketOperations struct {
 	fsutil.FilePipeSeek             `state:"nosave"`
 	fsutil.FileNotDirReaddir        `state:"nosave"`
 	fsutil.FileNoFsync              `state:"nosave"`
@@ -66,16 +66,18 @@ type socketOperations struct {
 	protocol int            // Read-only.
 	fd       int            // must be O_NONBLOCK
 	queue    waiter.Queue
+	GvisorFD int32
 }
 
-var _ = socket.Socket(&socketOperations{})
+var _ = socket.Socket(&SocketOperations{})
 
 func newSocketFile(ctx context.Context, family int, stype linux.SockType, protocol int, fd int, nonblock bool) (*fs.File, *syserr.Error) {
-	s := &socketOperations{
+	s := &SocketOperations{
 		family:   family,
 		stype:    stype,
 		protocol: protocol,
 		fd:       fd,
+		GvisorFD: -1,
 	}
 	if err := fdnotifier.AddFD(int32(fd), &s.queue); err != nil {
 		return nil, syserr.FromError(err)
@@ -86,30 +88,30 @@ func newSocketFile(ctx context.Context, family int, stype linux.SockType, protoc
 }
 
 // Release implements fs.FileOperations.Release.
-func (s *socketOperations) Release() {
+func (s *SocketOperations) Release() {
 	fdnotifier.RemoveFD(int32(s.fd))
 	syscall.Close(s.fd)
 }
 
 // Readiness implements waiter.Waitable.Readiness.
-func (s *socketOperations) Readiness(mask waiter.EventMask) waiter.EventMask {
+func (s *SocketOperations) Readiness(mask waiter.EventMask) waiter.EventMask {
 	return fdnotifier.NonBlockingPoll(int32(s.fd), mask)
 }
 
 // EventRegister implements waiter.Waitable.EventRegister.
-func (s *socketOperations) EventRegister(e *waiter.Entry, mask waiter.EventMask) {
+func (s *SocketOperations) EventRegister(e *waiter.Entry, mask waiter.EventMask) {
 	s.queue.EventRegister(e, mask)
 	fdnotifier.UpdateFD(int32(s.fd))
 }
 
 // EventUnregister implements waiter.Waitable.EventUnregister.
-func (s *socketOperations) EventUnregister(e *waiter.Entry) {
+func (s *SocketOperations) EventUnregister(e *waiter.Entry) {
 	s.queue.EventUnregister(e)
 	fdnotifier.UpdateFD(int32(s.fd))
 }
 
 // Read implements fs.FileOperations.Read.
-func (s *socketOperations) Read(ctx context.Context, _ *fs.File, dst usermem.IOSequence, _ int64) (int64, error) {
+func (s *SocketOperations) Read(ctx context.Context, _ *fs.File, dst usermem.IOSequence, _ int64) (int64, error) {
 	n, err := dst.CopyOutFrom(ctx, safemem.ReaderFunc(func(dsts safemem.BlockSeq) (uint64, error) {
 		// Refuse to do anything if any part of dst.Addrs was unusable.
 		if uint64(dst.NumBytes()) != dsts.NumBytes() {
@@ -132,7 +134,16 @@ func (s *socketOperations) Read(ctx context.Context, _ *fs.File, dst usermem.IOS
 }
 
 // Write implements fs.FileOperations.Write.
-func (s *socketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IOSequence, _ int64) (int64, error) {
+func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IOSequence, _ int64) (int64, error) {
+	t := ctx.(*kernel.Task)
+	t.Infof("[Write] Socket write called! on fd %v, gVisor fd %v", int32(s.fd), s.GvisorFD)
+	//valid := t.GetValid(int32(s.GvisorFD))
+	/*
+		if !valid {
+			t.Infof("[Write] Invalidated socket fd")
+			return -1, syserror.EPERM
+		}*/
+
 	n, err := src.CopyInTo(ctx, safemem.WriterFunc(func(srcs safemem.BlockSeq) (uint64, error) {
 		// Refuse to do anything if any part of src.Addrs was unusable.
 		if uint64(src.NumBytes()) != srcs.NumBytes() {
@@ -155,7 +166,7 @@ func (s *socketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 }
 
 // Connect implements socket.Socket.Connect.
-func (s *socketOperations) Connect(t *kernel.Task, sockaddr []byte, blocking bool) *syserr.Error {
+func (s *SocketOperations) Connect(t *kernel.Task, sockaddr []byte, blocking bool) *syserr.Error {
 	if len(sockaddr) > sizeofSockaddr {
 		sockaddr = sockaddr[:sizeofSockaddr]
 	}
@@ -195,7 +206,7 @@ func (s *socketOperations) Connect(t *kernel.Task, sockaddr []byte, blocking boo
 }
 
 // Accept implements socket.Socket.Accept.
-func (s *socketOperations) Accept(t *kernel.Task, peerRequested bool, flags int, blocking bool) (int32, linux.SockAddr, uint32, *syserr.Error) {
+func (s *SocketOperations) Accept(t *kernel.Task, peerRequested bool, flags int, blocking bool) (int32, linux.SockAddr, uint32, *syserr.Error) {
 	var peerAddr linux.SockAddr
 	var peerAddrBuf []byte
 	var peerAddrlen uint32
@@ -209,7 +220,7 @@ func (s *socketOperations) Accept(t *kernel.Task, peerRequested bool, flags int,
 	}
 
 	// Conservatively ignore all flags specified by the application and add
-	// SOCK_NONBLOCK since socketOperations requires it.
+	// SOCK_NONBLOCK since SocketOperations requires it.
 	fd, syscallErr := accept4(s.fd, peerAddrPtr, peerAddrlenPtr, syscall.SOCK_NONBLOCK|syscall.SOCK_CLOEXEC)
 	if blocking {
 		var ch chan struct{}
@@ -245,13 +256,20 @@ func (s *socketOperations) Accept(t *kernel.Task, peerRequested bool, flags int,
 	kfd, kerr := t.NewFDFrom(0, f, kernel.FDFlags{
 		CloseOnExec: flags&syscall.SOCK_CLOEXEC != 0,
 	})
+	hs, e := f.FileOperations.(socket.Socket)
+	if e {
+		skt, e1 := hs.(*SocketOperations)
+		if e1 {
+			skt.GvisorFD = kfd
+		}
+	}
 	t.Kernel().RecordSocket(f)
 
 	return kfd, peerAddr, peerAddrlen, syserr.FromError(kerr)
 }
 
 // Bind implements socket.Socket.Bind.
-func (s *socketOperations) Bind(t *kernel.Task, sockaddr []byte) *syserr.Error {
+func (s *SocketOperations) Bind(t *kernel.Task, sockaddr []byte) *syserr.Error {
 	if len(sockaddr) > sizeofSockaddr {
 		sockaddr = sockaddr[:sizeofSockaddr]
 	}
@@ -264,12 +282,12 @@ func (s *socketOperations) Bind(t *kernel.Task, sockaddr []byte) *syserr.Error {
 }
 
 // Listen implements socket.Socket.Listen.
-func (s *socketOperations) Listen(t *kernel.Task, backlog int) *syserr.Error {
+func (s *SocketOperations) Listen(t *kernel.Task, backlog int) *syserr.Error {
 	return syserr.FromError(syscall.Listen(s.fd, backlog))
 }
 
 // Shutdown implements socket.Socket.Shutdown.
-func (s *socketOperations) Shutdown(t *kernel.Task, how int) *syserr.Error {
+func (s *SocketOperations) Shutdown(t *kernel.Task, how int) *syserr.Error {
 	switch how {
 	case syscall.SHUT_RD, syscall.SHUT_WR, syscall.SHUT_RDWR:
 		return syserr.FromError(syscall.Shutdown(s.fd, how))
@@ -279,7 +297,7 @@ func (s *socketOperations) Shutdown(t *kernel.Task, how int) *syserr.Error {
 }
 
 // GetSockOpt implements socket.Socket.GetSockOpt.
-func (s *socketOperations) GetSockOpt(t *kernel.Task, level int, name int, outPtr usermem.Addr, outLen int) (interface{}, *syserr.Error) {
+func (s *SocketOperations) GetSockOpt(t *kernel.Task, level int, name int, outPtr usermem.Addr, outLen int) (interface{}, *syserr.Error) {
 	if outLen < 0 {
 		return nil, syserr.ErrInvalidArgument
 	}
@@ -328,7 +346,7 @@ func (s *socketOperations) GetSockOpt(t *kernel.Task, level int, name int, outPt
 }
 
 // SetSockOpt implements socket.Socket.SetSockOpt.
-func (s *socketOperations) SetSockOpt(t *kernel.Task, level int, name int, opt []byte) *syserr.Error {
+func (s *SocketOperations) SetSockOpt(t *kernel.Task, level int, name int, opt []byte) *syserr.Error {
 	// Whitelist options and constrain option length.
 	optlen := setSockOptLen(t, level, name)
 	switch level {
@@ -372,7 +390,7 @@ func (s *socketOperations) SetSockOpt(t *kernel.Task, level int, name int, opt [
 }
 
 // RecvMsg implements socket.Socket.RecvMsg.
-func (s *socketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags int, haveDeadline bool, deadline ktime.Time, senderRequested bool, controlLen uint64) (int, int, linux.SockAddr, uint32, socket.ControlMessages, *syserr.Error) {
+func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags int, haveDeadline bool, deadline ktime.Time, senderRequested bool, controlLen uint64) (int, int, linux.SockAddr, uint32, socket.ControlMessages, *syserr.Error) {
 	// Whitelist flags.
 	//
 	// FIXME(jamieliu): We can't support MSG_ERRQUEUE because it uses ancillary
@@ -487,8 +505,14 @@ func (s *socketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 }
 
 // SendMsg implements socket.Socket.SendMsg.
-func (s *socketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []byte, flags int, haveDeadline bool, deadline ktime.Time, controlMessages socket.ControlMessages) (int, *syserr.Error) {
+func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []byte, flags int, haveDeadline bool, deadline ktime.Time, controlMessages socket.ControlMessages) (int, *syserr.Error) {
 	// Whitelist flags.
+	//valid := t.GetValid(int32(s.GvisorFD))
+	/*
+		if !valid {
+			t.Infof("[SendMsg] Invalid fd %v", s.GvisorFD)
+			return -1, syserr.FromError(syserror.EPERM)
+		}*/
 	if flags&^(syscall.MSG_DONTWAIT|syscall.MSG_EOR|syscall.MSG_FASTOPEN|syscall.MSG_MORE|syscall.MSG_NOSIGNAL) != 0 {
 		return 0, syserr.ErrInvalidArgument
 	}
@@ -576,7 +600,7 @@ func translateIOSyscallError(err error) error {
 }
 
 // State implements socket.Socket.State.
-func (s *socketOperations) State() uint32 {
+func (s *SocketOperations) State() uint32 {
 	info := linux.TCPInfo{}
 	buf, err := getsockopt(s.fd, syscall.SOL_TCP, syscall.TCP_INFO, linux.SizeOfTCPInfo)
 	if err != nil {
@@ -598,7 +622,7 @@ func (s *socketOperations) State() uint32 {
 }
 
 // Type implements socket.Socket.Type.
-func (s *socketOperations) Type() (family int, skType linux.SockType, protocol int) {
+func (s *SocketOperations) Type() (family int, skType linux.SockType, protocol int) {
 	return s.family, s.stype, s.protocol
 }
 
@@ -639,7 +663,7 @@ func (p *socketProvider) Socket(t *kernel.Task, stypeflags linux.SockType, proto
 	}
 
 	// Conservatively ignore all flags specified by the application and add
-	// SOCK_NONBLOCK since socketOperations requires it. Pass a protocol of 0
+	// SOCK_NONBLOCK since SocketOperations requires it. Pass a protocol of 0
 	// to simplify the syscall filters, since 0 and IPPROTO_* are equivalent.
 	fd, err := syscall.Socket(p.family, int(stype)|syscall.SOCK_NONBLOCK|syscall.SOCK_CLOEXEC, 0)
 	if err != nil {

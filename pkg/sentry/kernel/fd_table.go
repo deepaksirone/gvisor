@@ -71,6 +71,7 @@ type descriptor struct {
 	file     *fs.File
 	fileVFS2 *vfs.FileDescription
 	flags    FDFlags
+	valid    bool
 }
 
 // FDTable is used to manage File references and flags.
@@ -100,11 +101,12 @@ type FDTable struct {
 
 func (f *FDTable) saveDescriptorTable() map[int32]descriptor {
 	m := make(map[int32]descriptor)
-	f.forEach(func(fd int32, file *fs.File, fileVFS2 *vfs.FileDescription, flags FDFlags) {
+	f.forEach(func(fd int32, file *fs.File, fileVFS2 *vfs.FileDescription, flags FDFlags, valid bool) {
 		m[fd] = descriptor{
 			file:     file,
 			fileVFS2: fileVFS2,
 			flags:    flags,
+			valid:    valid,
 		}
 	})
 	return m
@@ -113,7 +115,7 @@ func (f *FDTable) saveDescriptorTable() map[int32]descriptor {
 func (f *FDTable) loadDescriptorTable(m map[int32]descriptor) {
 	f.init() // Initialize table.
 	for fd, d := range m {
-		f.setAll(fd, d.file, d.fileVFS2, d.flags)
+		f.setAll(fd, d.file, d.fileVFS2, d.flags, d.valid)
 
 		// Note that we do _not_ need to acquire a extra table reference here. The
 		// table reference will already be accounted for in the file, so we drop the
@@ -194,10 +196,10 @@ func (f *FDTable) Size() int {
 // forEach iterates over all non-nil files.
 //
 // It is the caller's responsibility to acquire an appropriate lock.
-func (f *FDTable) forEach(fn func(fd int32, file *fs.File, fileVFS2 *vfs.FileDescription, flags FDFlags)) {
+func (f *FDTable) forEach(fn func(fd int32, file *fs.File, fileVFS2 *vfs.FileDescription, flags FDFlags, valid bool)) {
 	fd := int32(0)
 	for {
-		file, fileVFS2, flags, ok := f.getAll(fd)
+		file, fileVFS2, flags, ok, valid := f.getAll(fd)
 		if !ok {
 			break
 		}
@@ -206,13 +208,13 @@ func (f *FDTable) forEach(fn func(fd int32, file *fs.File, fileVFS2 *vfs.FileDes
 			if !file.TryIncRef() {
 				continue // Race caught.
 			}
-			fn(fd, file, nil, flags)
+			fn(fd, file, nil, flags, valid)
 			file.DecRef()
 		case fileVFS2 != nil:
 			if !fileVFS2.TryIncRef() {
 				continue // Race caught.
 			}
-			fn(fd, nil, fileVFS2, flags)
+			fn(fd, nil, fileVFS2, flags, valid)
 			fileVFS2.DecRef()
 		}
 		fd++
@@ -222,7 +224,7 @@ func (f *FDTable) forEach(fn func(fd int32, file *fs.File, fileVFS2 *vfs.FileDes
 // String is a stringer for FDTable.
 func (f *FDTable) String() string {
 	var buf strings.Builder
-	f.forEach(func(fd int32, file *fs.File, fileVFS2 *vfs.FileDescription, flags FDFlags) {
+	f.forEach(func(fd int32, file *fs.File, fileVFS2 *vfs.FileDescription, flags FDFlags, valid bool) {
 		switch {
 		case file != nil:
 			n, _ := file.Dirent.FullName(nil /* root */)
@@ -274,16 +276,16 @@ func (f *FDTable) NewFDs(ctx context.Context, fd int32, files []*fs.File, flags 
 
 	// Install all entries.
 	for i := fd; i < end && len(fds) < len(files); i++ {
-		if d, _, _ := f.get(i); d == nil {
-			f.set(i, files[len(fds)], flags) // Set the descriptor.
-			fds = append(fds, i)             // Record the file descriptor.
+		if d, _, _, _ := f.get(i); d == nil {
+			f.set(i, files[len(fds)], flags, false) // Set the descriptor.
+			fds = append(fds, i)                    // Record the file descriptor.
 		}
 	}
 
 	// Failure? Unwind existing FDs.
 	if len(fds) < len(files) {
 		for _, i := range fds {
-			f.set(i, nil, FDFlags{}) // Zap entry.
+			f.set(i, nil, FDFlags{}, false) // Zap entry.
 		}
 		return nil, syscall.EMFILE
 	}
@@ -299,18 +301,18 @@ func (f *FDTable) NewFDs(ctx context.Context, fd int32, files []*fs.File, flags 
 // NewFDAt sets the file reference for the given FD. If there is an active
 // reference for that FD, the ref count for that existing reference is
 // decremented.
-func (f *FDTable) NewFDAt(ctx context.Context, fd int32, file *fs.File, flags FDFlags) error {
-	return f.newFDAt(ctx, fd, file, nil, flags)
+func (f *FDTable) NewFDAt(ctx context.Context, fd int32, file *fs.File, flags FDFlags, valid bool) error {
+	return f.newFDAt(ctx, fd, file, nil, flags, valid)
 }
 
 // NewFDAtVFS2 sets the file reference for the given FD. If there is an active
 // reference for that FD, the ref count for that existing reference is
 // decremented.
-func (f *FDTable) NewFDAtVFS2(ctx context.Context, fd int32, file *vfs.FileDescription, flags FDFlags) error {
-	return f.newFDAt(ctx, fd, nil, file, flags)
+func (f *FDTable) NewFDAtVFS2(ctx context.Context, fd int32, file *vfs.FileDescription, flags FDFlags, valid bool) error {
+	return f.newFDAt(ctx, fd, nil, file, flags, valid)
 }
 
-func (f *FDTable) newFDAt(ctx context.Context, fd int32, file *fs.File, fileVFS2 *vfs.FileDescription, flags FDFlags) error {
+func (f *FDTable) newFDAt(ctx context.Context, fd int32, file *fs.File, fileVFS2 *vfs.FileDescription, flags FDFlags, valid bool) error {
 	if fd < 0 {
 		// Don't accept negative FDs.
 		return syscall.EBADF
@@ -327,7 +329,7 @@ func (f *FDTable) newFDAt(ctx context.Context, fd int32, file *fs.File, fileVFS2
 	}
 
 	// Install the entry.
-	f.setAll(fd, file, fileVFS2, flags)
+	f.setAll(fd, file, fileVFS2, flags, valid)
 	return nil
 }
 
@@ -343,14 +345,35 @@ func (f *FDTable) SetFlags(fd int32, flags FDFlags) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	file, _, _ := f.get(fd)
+	file, _, _, valid := f.get(fd)
 	if file == nil {
 		// No file found.
 		return syscall.EBADF
 	}
 
 	// Update the flags.
-	f.set(fd, file, flags)
+	f.set(fd, file, flags, valid)
+	return nil
+}
+
+// SetValid sets the valid bit for the given file descriptor.
+func (f *FDTable) SetValid(fd int32, valid bool) error {
+	if fd < 0 {
+		// Don't accept negative FDs.
+		return syscall.EBADF
+	}
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	file, flags, _, _ := f.get(fd)
+	if file == nil {
+		// No file found.
+		return syscall.EBADF
+	}
+
+	// Update the flags.
+	f.set(fd, file, flags, valid)
 	return nil
 }
 
@@ -360,22 +383,22 @@ func (f *FDTable) SetFlags(fd int32, flags FDFlags) error {
 // N.B. Callers are required to use DecRef when they are done.
 //
 //go:nosplit
-func (f *FDTable) Get(fd int32) (*fs.File, FDFlags) {
+func (f *FDTable) Get(fd int32) (*fs.File, FDFlags, bool) {
 	if fd < 0 {
-		return nil, FDFlags{}
+		return nil, FDFlags{}, false
 	}
 
 	for {
-		file, flags, _ := f.get(fd)
+		file, flags, _, valid := f.get(fd)
 		if file != nil {
 			if !file.TryIncRef() {
 				continue // Race caught.
 			}
 			// Reference acquired.
-			return file, flags
+			return file, flags, valid
 		}
 		// No file available.
-		return nil, FDFlags{}
+		return nil, FDFlags{}, valid
 	}
 }
 
@@ -391,7 +414,7 @@ func (f *FDTable) GetVFS2(fd int32) (*vfs.FileDescription, FDFlags) {
 	}
 
 	for {
-		file, flags, _ := f.getVFS2(fd)
+		file, flags, _, _ := f.getVFS2(fd)
 		if file != nil {
 			if !file.TryIncRef() {
 				continue // Race caught.
@@ -407,7 +430,7 @@ func (f *FDTable) GetVFS2(fd int32) (*vfs.FileDescription, FDFlags) {
 // GetFDs returns a list of valid fds.
 func (f *FDTable) GetFDs() []int32 {
 	fds := make([]int32, 0, int(atomic.LoadInt32(&f.used)))
-	f.forEach(func(fd int32, _ *fs.File, _ *vfs.FileDescription, _ FDFlags) {
+	f.forEach(func(fd int32, file *fs.File, _ *vfs.FileDescription, flags FDFlags, valid bool) {
 		fds = append(fds, fd)
 	})
 	return fds
@@ -418,7 +441,7 @@ func (f *FDTable) GetFDs() []int32 {
 // they're done using the slice.
 func (f *FDTable) GetRefs() []*fs.File {
 	files := make([]*fs.File, 0, f.Size())
-	f.forEach(func(_ int32, file *fs.File, _ *vfs.FileDescription, _ FDFlags) {
+	f.forEach(func(_ int32, file *fs.File, _ *vfs.FileDescription, _ FDFlags, _ bool) {
 		file.IncRef() // Acquire a reference for caller.
 		files = append(files, file)
 	})
@@ -430,7 +453,7 @@ func (f *FDTable) GetRefs() []*fs.File {
 // they're done using the slice.
 func (f *FDTable) GetRefsVFS2() []*vfs.FileDescription {
 	files := make([]*vfs.FileDescription, 0, f.Size())
-	f.forEach(func(_ int32, _ *fs.File, file *vfs.FileDescription, _ FDFlags) {
+	f.forEach(func(_ int32, _ *fs.File, file *vfs.FileDescription, _ FDFlags, _ bool) {
 		file.IncRef() // Acquire a reference for caller.
 		files = append(files, file)
 	})
@@ -441,14 +464,14 @@ func (f *FDTable) GetRefsVFS2() []*vfs.FileDescription {
 func (f *FDTable) Fork() *FDTable {
 	clone := f.k.NewFDTable()
 
-	f.forEach(func(fd int32, file *fs.File, fileVFS2 *vfs.FileDescription, flags FDFlags) {
+	f.forEach(func(fd int32, file *fs.File, fileVFS2 *vfs.FileDescription, flags FDFlags, valid bool) {
 		// The set function here will acquire an appropriate table
 		// reference for the clone. We don't need anything else.
 		switch {
 		case file != nil:
-			clone.set(fd, file, flags)
+			clone.set(fd, file, flags, valid)
 		case fileVFS2 != nil:
-			clone.setVFS2(fd, fileVFS2, flags)
+			clone.setVFS2(fd, fileVFS2, flags, valid)
 		}
 	})
 	return clone
@@ -470,7 +493,7 @@ func (f *FDTable) Remove(fd int32) (*fs.File, *vfs.FileDescription) {
 		f.next = fd
 	}
 
-	orig, orig2, _, _ := f.getAll(fd)
+	orig, orig2, _, _, _ := f.getAll(fd)
 
 	// Add reference for caller.
 	switch {
@@ -479,7 +502,7 @@ func (f *FDTable) Remove(fd int32) (*fs.File, *vfs.FileDescription) {
 	case orig2 != nil:
 		orig2.IncRef()
 	}
-	f.setAll(fd, nil, nil, FDFlags{}) // Zap entry.
+	f.setAll(fd, nil, nil, FDFlags{}, false) // Zap entry.
 	return orig, orig2
 }
 
@@ -488,9 +511,9 @@ func (f *FDTable) RemoveIf(cond func(*fs.File, *vfs.FileDescription, FDFlags) bo
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	f.forEach(func(fd int32, file *fs.File, fileVFS2 *vfs.FileDescription, flags FDFlags) {
+	f.forEach(func(fd int32, file *fs.File, fileVFS2 *vfs.FileDescription, flags FDFlags, valid bool) {
 		if cond(file, fileVFS2, flags) {
-			f.set(fd, nil, FDFlags{}) // Clear from table.
+			f.set(fd, nil, FDFlags{}, valid) // Clear from table.
 			// Update current available position.
 			if fd < f.next {
 				f.next = fd

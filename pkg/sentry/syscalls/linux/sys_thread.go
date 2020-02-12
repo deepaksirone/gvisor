@@ -128,7 +128,7 @@ func execveat(t *kernel.Task, dirFD int32, pathnameAddr, argvAddr, envvAddr user
 		wd = t.FSContext().WorkingDirectory()
 	} else {
 		// Need to extract the given FD.
-		f, fdFlags := t.FDTable().Get(dirFD)
+		f, fdFlags, _ := t.FDTable().Get(dirFD)
 		if f == nil {
 			return 0, nil, syserror.EBADF
 		}

@@ -26,7 +26,7 @@ go_rules_dependencies()
 
 go_register_toolchains(
     go_version = "1.13.7",
-    nogo = "@//:nogo",
+    #nogo = "@//:nogo",
 )
 
 load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies", "go_repository")
@@ -294,6 +294,29 @@ go_repository(
     importpath = "github.com/google/go-github",
     sum = "h1:N0LgJ1j65A7kfXrZnUDaYCs/Sf4rEjNlfyDHW9dolSY=",
     version = "v17.0.0",
+)
+
+go_repository(
+    name = "com_github_zeromq_goczmq",
+    importpath = "github.com/deepaksirone/goczmq",
+    commit = "7f1d6442e00dd48b0f2f95ef48409d39112e2f1e",
+)
+
+#go_repository(
+#    name = "com_github_golang_grpc",
+#    importpath = "github.com/grpc/grpc-go",
+#    version = "v1.25.2",
+#)
+
+# System Call test dependencies.
+http_archive(
+    name = "com_github_gflags_gflags",
+    sha256 = "34af2f15cf7367513b352bdcd2493ab14ce43692d2dcd9dfc499492966c64dcf",
+    strip_prefix = "gflags-2.2.2",
+    urls = [
+        "https://mirror.bazel.build/github.com/gflags/gflags/archive/v2.2.2.tar.gz",
+        "https://github.com/gflags/gflags/archive/v2.2.2.tar.gz",
+    ],
 )
 
 go_repository(

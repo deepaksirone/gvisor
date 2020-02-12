@@ -538,7 +538,7 @@ func (l *Loader) run() error {
 		ep.pidnsPath = ns.Path
 	}
 	if l.console {
-		ttyFile, _ := l.rootProcArgs.FDTable.Get(0)
+		ttyFile, _, _ := l.rootProcArgs.FDTable.Get(0)
 		defer ttyFile.DecRef()
 		ep.tty = ttyFile.FileOperations.(*host.TTYFileOperations)
 

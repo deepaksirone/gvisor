@@ -53,6 +53,7 @@ import (
 	"gvisor.dev/gvisor/pkg/sentry/kernel/auth"
 	"gvisor.dev/gvisor/pkg/sentry/kernel/epoll"
 	"gvisor.dev/gvisor/pkg/sentry/kernel/futex"
+	guard "gvisor.dev/gvisor/pkg/sentry/kernel/guard"
 	"gvisor.dev/gvisor/pkg/sentry/kernel/sched"
 	ktime "gvisor.dev/gvisor/pkg/sentry/kernel/time"
 	"gvisor.dev/gvisor/pkg/sentry/limits"
@@ -238,6 +239,15 @@ type Kernel struct {
 
 	// SpecialOpts contains special kernel options.
 	SpecialOpts
+
+	//Guard
+	guard guard.Guard
+
+	//Guard channel
+	guardChan chan guard.KernMsg
+
+	//Controller Channel
+	guardCtrChan chan int
 }
 
 // InitKernelArgs holds arguments to Init.
@@ -331,7 +341,33 @@ func (k *Kernel) Init(args InitKernelArgs) error {
 	k.monotonicClock = &timekeeperClock{tk: args.Timekeeper, c: sentrytime.Monotonic}
 	k.futexes = futex.NewManager()
 	k.netlinkPorts = port.New()
+	k.guard = guard.New("127.0.0.1", 5000)
+	k.guardChan = make(chan guard.KernMsg)
+	k.guardCtrChan = make(chan int)
+
 	return nil
+}
+
+func (k *Kernel) SendDummyGuard() {
+	k.guardChan <- guard.KernMsg{}
+}
+
+func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte) int {
+	var msg guard.KernMsg
+	recvChan := make(chan int)
+
+	copy(msg.EventName[:], event_name)
+	msg.MetaData = []byte(meta_str)
+	msg.Data = make([]byte, len(data))
+	copy(msg.Data[:], data)
+	msg.RecvChan = recvChan
+
+	k.guardChan <- msg
+	log.Infof("[Kernel] waiting for Guard response!")
+	recv := <-recvChan
+	log.Infof("[Kernel] received Guard response!")
+
+	return recv
 }
 
 // SaveTo saves the state of k to w.
@@ -457,7 +493,7 @@ func (ts *TaskSet) forEachFDPaused(f func(*fs.File, *vfs.FileDescription) error)
 		if t.fdTable == nil {
 			continue
 		}
-		t.fdTable.forEach(func(_ int32, file *fs.File, fileVFS2 *vfs.FileDescription, _ FDFlags) {
+		t.fdTable.forEach(func(_ int32, file *fs.File, fileVFS2 *vfs.FileDescription, _ FDFlags, valid bool) {
 			if lastErr := f(file, fileVFS2); lastErr != nil && err == nil {
 				err = lastErr
 			}
@@ -521,7 +557,7 @@ func (ts *TaskSet) unregisterEpollWaiters() {
 	for t := range ts.Root.tids {
 		// We can skip locking Task.mu here since the kernel is paused.
 		if t.fdTable != nil {
-			t.fdTable.forEach(func(_ int32, file *fs.File, _ *vfs.FileDescription, _ FDFlags) {
+			t.fdTable.forEach(func(_ int32, file *fs.File, _ *vfs.FileDescription, _ FDFlags, valid bool) {
 				if e, ok := file.FileOperations.(*epoll.EventPoll); ok {
 					e.UnregisterEpollWaiters()
 				}
@@ -884,12 +920,16 @@ func (k *Kernel) Start() error {
 		Enabled: true,
 		Period:  linux.ClockTick,
 	})
+
 	// If k was created by LoadKernelFrom, timers were stopped during
 	// Kernel.SaveTo and need to be resumed. If k was created by NewKernel,
 	// this is a no-op.
 	k.resumeTimeLocked()
 	// Start task goroutines.
 	k.tasks.mu.RLock()
+	go k.guard.Run(k.guardChan, k.guardCtrChan)
+	//k.guard.SendKeyInitReq()
+	//<-k.guardCtrChan
 	defer k.tasks.mu.RUnlock()
 	for t, tid := range k.tasks.Root.tids {
 		t.Start(tid)
@@ -923,7 +963,7 @@ func (k *Kernel) pauseTimeLocked() {
 		// This means we'll iterate FDTables shared by multiple tasks repeatedly,
 		// but ktime.Timer.Pause is idempotent so this is harmless.
 		if t.fdTable != nil {
-			t.fdTable.forEach(func(_ int32, file *fs.File, _ *vfs.FileDescription, _ FDFlags) {
+			t.fdTable.forEach(func(_ int32, file *fs.File, _ *vfs.FileDescription, _ FDFlags, valid bool) {
 				if tfd, ok := file.FileOperations.(*timerfd.TimerOperations); ok {
 					tfd.PauseTimer()
 				}
@@ -953,7 +993,7 @@ func (k *Kernel) resumeTimeLocked() {
 			}
 		}
 		if t.fdTable != nil {
-			t.fdTable.forEach(func(_ int32, file *fs.File, _ *vfs.FileDescription, _ FDFlags) {
+			t.fdTable.forEach(func(_ int32, file *fs.File, _ *vfs.FileDescription, _ FDFlags, valid bool) {
 				if tfd, ok := file.FileOperations.(*timerfd.TimerOperations); ok {
 					tfd.ResumeTimer()
 				}
@@ -1061,6 +1101,7 @@ func (k *Kernel) decRunningTasks() {
 // WaitExited blocks until all tasks in k have exited.
 func (k *Kernel) WaitExited() {
 	k.tasks.liveGoroutines.Wait()
+	k.guardCtrChan <- 1 // Kill the guard after all tasks have exited
 }
 
 // Kill requests that all tasks in k immediately exit as if group exiting with

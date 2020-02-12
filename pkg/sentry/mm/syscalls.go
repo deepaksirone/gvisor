@@ -71,6 +71,14 @@ func (mm *MemoryManager) HandleUserFault(ctx context.Context, addr usermem.Addr,
 	return err
 }
 
+func (mm *MemoryManager) GetVMA(ctx context.Context, ar usermem.AddrRange, at usermem.AccessType, ignorePermissions bool) (vmaIterator, vmaGapIterator, error) {
+	mm.mappingMu.Lock()
+	vma, gap, err := mm.getVMAsLocked(ctx, ar, at, ignorePermissions)
+	mm.mappingMu.Unlock()
+
+	return vma, gap, err
+}
+
 // MMap establishes a memory mapping.
 func (mm *MemoryManager) MMap(ctx context.Context, opts memmap.MMapOpts) (usermem.Addr, error) {
 	if opts.Length == 0 {

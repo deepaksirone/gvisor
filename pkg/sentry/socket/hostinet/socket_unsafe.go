@@ -55,7 +55,7 @@ func writev(fd int, srcs []syscall.Iovec) (uint64, error) {
 }
 
 // Ioctl implements fs.FileOperations.Ioctl.
-func (s *socketOperations) Ioctl(ctx context.Context, _ *fs.File, io usermem.IO, args arch.SyscallArguments) (uintptr, error) {
+func (s *SocketOperations) Ioctl(ctx context.Context, _ *fs.File, io usermem.IO, args arch.SyscallArguments) (uintptr, error) {
 	switch cmd := uintptr(args[1].Int()); cmd {
 	case syscall.TIOCINQ, syscall.TIOCOUTQ:
 		var val int32
@@ -93,7 +93,7 @@ func getsockopt(fd int, level, name int, optlen int) ([]byte, error) {
 }
 
 // GetSockName implements socket.Socket.GetSockName.
-func (s *socketOperations) GetSockName(t *kernel.Task) (linux.SockAddr, uint32, *syserr.Error) {
+func (s *SocketOperations) GetSockName(t *kernel.Task) (linux.SockAddr, uint32, *syserr.Error) {
 	addr := make([]byte, sizeofSockaddr)
 	addrlen := uint32(len(addr))
 	_, _, errno := syscall.Syscall(syscall.SYS_GETSOCKNAME, uintptr(s.fd), uintptr(unsafe.Pointer(&addr[0])), uintptr(unsafe.Pointer(&addrlen)))
@@ -104,7 +104,7 @@ func (s *socketOperations) GetSockName(t *kernel.Task) (linux.SockAddr, uint32, 
 }
 
 // GetPeerName implements socket.Socket.GetPeerName.
-func (s *socketOperations) GetPeerName(t *kernel.Task) (linux.SockAddr, uint32, *syserr.Error) {
+func (s *SocketOperations) GetPeerName(t *kernel.Task) (linux.SockAddr, uint32, *syserr.Error) {
 	addr := make([]byte, sizeofSockaddr)
 	addrlen := uint32(len(addr))
 	_, _, errno := syscall.Syscall(syscall.SYS_GETPEERNAME, uintptr(s.fd), uintptr(unsafe.Pointer(&addr[0])), uintptr(unsafe.Pointer(&addrlen)))

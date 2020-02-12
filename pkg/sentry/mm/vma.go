@@ -304,6 +304,10 @@ func (mm *MemoryManager) getVMAsLocked(ctx context.Context, ar usermem.AddrRange
 	return vbegin, vgap, syserror.EFAULT
 }
 
+func (mm *MemoryManager) GetVMAsLocked(ctx context.Context, ar usermem.AddrRange, at usermem.AccessType, ignorePermissions bool) (vmaIterator, vmaGapIterator, error) {
+	return mm.GetVMAsLocked(ctx, ar, at, ignorePermissions)
+}
+
 // getVecVMAsLocked ensures that vmas exist for all addresses in ars, and
 // support access to type of (at, ignorePermissions). It returns the subset of
 // ars for which vmas exist. If this is not equal to ars, it returns a non-nil

@@ -1,7 +1,7 @@
+package(licenses = ["notice"])  # Apache 2.0
 load("@io_bazel_rules_go//go:def.bzl", "go_path", "nogo")
 load("@bazel_gazelle//:def.bzl", "gazelle")
 
-package(licenses = ["notice"])
 
 # The sandbox filegroup is used for sandbox-internal dependencies.
 package_group(

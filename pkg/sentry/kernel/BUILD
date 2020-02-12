@@ -172,6 +172,7 @@ go_library(
         "//pkg/sentry/kernel/auth",
         "//pkg/sentry/kernel/epoll",
         "//pkg/sentry/kernel/futex",
+	"//pkg/sentry/kernel/guard",
         "//pkg/sentry/kernel/sched",
         "//pkg/sentry/kernel/semaphore",
         "//pkg/sentry/kernel/shm",

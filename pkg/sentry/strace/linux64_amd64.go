@@ -359,6 +359,8 @@ var linuxAMD64 = SyscallMap{
 	332: makeSyscallInfo("statx", FD, Path, Hex, Hex, Hex),
 	333: makeSyscallInfo("io_pgetevents", Hex, Hex, Hex, Hex, Timespec, SigSet),
 	334: makeSyscallInfo("rseq", Hex, Hex, Hex, Hex),
+	350: makeSyscallInfo("hypercall", FD),
+	351: makeSyscallInfo("validate_ssl_send", FD, ReadBuffer, ReadBuffer, ReadBuffer, Hex),
 	424: makeSyscallInfo("pidfd_send_signal", FD, Signal, Hex, Hex),
 	425: makeSyscallInfo("io_uring_setup", Hex, Hex),
 	426: makeSyscallInfo("io_uring_enter", FD, Hex, Hex, Hex, SigSet, Hex),
