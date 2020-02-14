@@ -365,14 +365,12 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
 	/*
 		if er != nil {
 			log.Infof("[ZMQ] Error sending message to Controller")
-		}*/
-	/*
-		_, ero := net.Dial("tcp", "127.0.0.1:7777")
+		}*/ /*
+		_, ero := net.Dial("tcp", "golang.org:80")
 		if ero != nil {
 			log.Infof("Unable to connect to Controller")
 			log.Infof(ero.Error())
-		}
-	*/
+		}*/
 	/*
 		conn, err := grpc.Dial("127.0.0.1:7777", grpc.WithInsecure(), grpc.WithBlock())
 		if err != nil {

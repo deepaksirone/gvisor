@@ -69,7 +69,7 @@ var (
 	hardwareGSO        = flag.Bool("gso", true, "enable hardware segmentation offload if it is supported by a network device.")
 	softwareGSO        = flag.Bool("software-gso", true, "enable software segmentation offload when hardware ofload can't be enabled.")
 	platformName       = flag.String("platform", "ptrace", "specifies which platform to use: ptrace (default), kvm")
-	network            = flag.String("network", "host", "specifies which network to use: sandbox (default), host, none. Using network inside the sandbox is more secure because it's isolated from the host network.")
+	network            = flag.String("network", "sandbox", "specifies which network to use: sandbox (default), host, none. Using network inside the sandbox is more secure because it's isolated from the host network.")
 	fileAccess         = flag.String("file-access", "exclusive", "specifies which filesystem to use for the root mount: exclusive (default), shared. Volume mounts are always shared.")
 	fsGoferHostUDS     = flag.Bool("fsgofer-host-uds", false, "allow the gofer to mount Unix Domain Sockets.")
 	overlay            = flag.Bool("overlay", false, "wrap filesystem mounts with writable overlay. All modifications are stored in memory inside the sandbox.")
@@ -175,7 +175,7 @@ func main() {
 		cmd.Fatalf("overlay flag is incompatible with shared file access")
 	}
 
-	netType, err := boot.MakeNetworkType("host")
+	netType, err := boot.MakeNetworkType(*network)
 	if err != nil {
 		cmd.Fatalf("%v", err)
 	}

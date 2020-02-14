@@ -424,9 +424,11 @@ func routesForIface(iface net.Interface) ([]boot.Route, *boot.Route, *boot.Route
 // removeAddress removes IP address from network device. It's equivalent to:
 //   ip addr del <ipAndMask> dev <name>
 func removeAddress(source netlink.Link, ipAndMask string) error {
-	addr, err := netlink.ParseAddr(ipAndMask)
-	if err != nil {
-		return err
-	}
-	return netlink.AddrDel(source, addr)
+	/*
+		addr, err := netlink.ParseAddr(ipAndMask)
+		if err != nil {
+			return err
+		}
+		return netlink.AddrDel(source, addr)*/
+	return nil
 }
