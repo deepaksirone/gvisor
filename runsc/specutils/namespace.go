@@ -119,7 +119,7 @@ func setNS(fd, nsType uintptr) error {
 //
 // Preconditions: Must be called with os thread locked.
 func ApplyNS(ns specs.LinuxNamespace) (func(), error) {
-	log.Infof("Applying namespace %v at path %q", ns.Type, ns.Path)
+	log.Infof("Applying namespace %v at path %q, curPid: %v", ns.Type, ns.Path, os.Getpid())
 	newNS, err := os.Open(ns.Path)
 	if err != nil {
 		return nil, fmt.Errorf("error opening %q: %v", ns.Path, err)
@@ -140,7 +140,7 @@ func ApplyNS(ns specs.LinuxNamespace) (func(), error) {
 		return nil, fmt.Errorf("error setting namespace of type %v and path %q: %v", ns.Type, ns.Path, err)
 	}
 	return func() {
-		log.Infof("Restoring namespace %v", ns.Type)
+		log.Infof("Restoring namespace %v from path: %v to path: %v, pid: %v", ns.Type, ns.Path, curPath, os.Getpid())
 		defer oldNS.Close()
 		if err := setNS(oldNS.Fd(), flag); err != nil {
 			panic(fmt.Sprintf("error restoring namespace: of type %v: %v", ns.Type, err))

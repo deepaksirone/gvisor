@@ -17,6 +17,7 @@ package sandbox
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -63,9 +64,29 @@ func setupNetwork(conn *urpc.Client, pid int, spec *specs.Spec, conf *boot.Confi
 		// Build the path to the net namespace of the sandbox process.
 		// This is what we will copy.
 		nsPath := filepath.Join("/proc", strconv.Itoa(pid), "ns/net")
+		//_, err := net.Dial("tcp", "golang.org:80")
+		//resp, err := http.Get("http://pages.cs.wisc.edu/")
+		//if err != nil {
+		// handle error
+		//	log.Debugf("[Bleeding] Connect to golang.org failed")
+		//} else {
+		//	log.Debugf("[Bleeding] Connect succeeded!")
+		//	log.Debugf("[Bleeding] Response: %v", resp)
+		//}
+
 		if err := createInterfacesAndRoutesFromNS(conn, nsPath, conf.HardwareGSO, conf.SoftwareGSO, conf.NumNetworkChannels); err != nil {
 			return fmt.Errorf("creating interfaces from net namespace %q: %v", nsPath, err)
 		}
+
+		rsp, er := http.Get("http://pages.cs.wisc.edu/")
+		if er != nil {
+			// handle error
+			log.Debugf("[Bleeding] Connect[#2] to golang.org failed")
+		} else {
+			log.Debugf("[Bleeding] Connect[#2] succeeded!")
+			log.Debugf("[Bleeding] Response: %v", rsp)
+		}
+
 	case boot.NetworkHost:
 		// Nothing to do here.
 	default:
@@ -276,6 +297,16 @@ func createInterfacesAndRoutesFromNS(conn *urpc.Client, nsPath string, hardwareG
 	if err := conn.Call(boot.NetworkCreateLinksAndRoutes, &args, nil); err != nil {
 		return fmt.Errorf("creating links and routes: %v", err)
 	}
+	log.Debugf("[Bleeding] After RPC Call")
+	ifs, err := net.Interfaces()
+	if err != nil {
+		return fmt.Errorf("querying interfaces: %v", err)
+	}
+
+	for _, ifc := range ifs {
+		routesForIface(ifc)
+	}
+
 	return nil
 }
 
@@ -376,6 +407,7 @@ func routesForIface(iface net.Interface) ([]boot.Route, *boot.Route, *boot.Route
 	var routes []boot.Route
 	for _, r := range rs {
 		// Is it a default route?
+		log.Debugf("[Bleeding] Iface %v: route: %v", iface, r)
 		if r.Dst == nil {
 			if r.Gw == nil {
 				return nil, nil, nil, fmt.Errorf("default route with no gateway %q: %+v", iface.Name, r)
@@ -424,11 +456,10 @@ func routesForIface(iface net.Interface) ([]boot.Route, *boot.Route, *boot.Route
 // removeAddress removes IP address from network device. It's equivalent to:
 //   ip addr del <ipAndMask> dev <name>
 func removeAddress(source netlink.Link, ipAndMask string) error {
-	/*
-		addr, err := netlink.ParseAddr(ipAndMask)
-		if err != nil {
-			return err
-		}
-		return netlink.AddrDel(source, addr)*/
-	return nil
+	addr, err := netlink.ParseAddr(ipAndMask)
+	if err != nil {
+		return err
+	}
+	return netlink.AddrDel(source, addr)
+	//return nil
 }

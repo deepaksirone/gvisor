@@ -4,9 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	zmq "github.com/deepaksirone/goczmq"
+	"runtime"
 	//"github.com/grpc/grpc-go"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"golang.org/x/sys/unix"
 	"gvisor.dev/gvisor/pkg/log"
-	//"net"
+	"gvisor.dev/gvisor/runsc/specutils"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -339,8 +343,107 @@ func (g *Guard) SendKeyInitReq() (string, *zmq.Channeler) {
 	return id, updater
 }
 
-func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
+func joinNetNS(nsPath string) (func(), error) {
+	runtime.LockOSThread()
+	restoreNS, err := specutils.ApplyNS(specs.LinuxNamespace{
+		Type: specs.NetworkNamespace,
+		Path: nsPath,
+	})
+	if err != nil {
+		runtime.UnlockOSThread()
+		return nil, fmt.Errorf("joining net namespace %q: %v", nsPath, err)
+	}
+	return func() {
+		restoreNS()
+		runtime.UnlockOSThread()
+	}, nil
+}
+
+func applyNS(nsFD int) (func(), error) {
+	runtime.LockOSThread()
+	log.Infof("Applying namespace network root curPid: %v", os.Getpid())
+	newNS := os.NewFile(uintptr(nsFD), "root-ns")
+	/*if err != nil {
+		return nil, fmt.Errorf("error opening %q: %v", ns.Path, err)
+	}*/
+	defer newNS.Close()
+
+	// Store current namespace to restore back.
+	curPath := "/proc/self/ns/net"
+	oldNS, err := os.Open(curPath)
+	if err != nil {
+		return nil, fmt.Errorf("error opening %q: %v", curPath, err)
+	}
+
+	// Set namespace to the one requested and setup function to restore it back.
+	flag := nsCloneFlag(specs.NetworkNamespace)
+	if err := setNS(newNS.Fd(), flag); err != nil {
+		oldNS.Close()
+		return nil, fmt.Errorf("error setting namespace of type %v and path %q: %v", "network", "root-netns", err)
+	}
+	return func() {
+		log.Infof("Restoring namespace %v from path: %v to path: %v, pid: %v", "network", "root-netns", curPath, os.Getpid())
+		defer oldNS.Close()
+		if err := setNS(oldNS.Fd(), flag); err != nil {
+			panic(fmt.Sprintf("error restoring namespace: of type %v: %v", "network", err))
+		}
+	}, nil
+}
+
+func nsCloneFlag(nst specs.LinuxNamespaceType) uintptr {
+	switch nst {
+	case specs.IPCNamespace:
+		return unix.CLONE_NEWIPC
+	case specs.MountNamespace:
+		return unix.CLONE_NEWNS
+	case specs.NetworkNamespace:
+		return unix.CLONE_NEWNET
+	case specs.PIDNamespace:
+		return unix.CLONE_NEWPID
+	case specs.UTSNamespace:
+		return unix.CLONE_NEWUTS
+	case specs.UserNamespace:
+		return unix.CLONE_NEWUSER
+	case specs.CgroupNamespace:
+		return unix.CLONE_NEWCGROUP
+	default:
+		panic(fmt.Sprintf("unknown namespace %v", nst))
+	}
+}
+
+func setNS(fd, nsType uintptr) error {
+	if _, _, err := syscall.RawSyscall(unix.SYS_SETNS, fd, nsType, 0); err != 0 {
+		return err
+	}
+	return nil
+}
+
+func (g *Guard) Run(ch chan KernMsg, ctr chan int, netns int) {
 	// Connect to the controller
+	resp, err := http.Get("http://pages.cs.wisc.edu/")
+	if err != nil {
+		// handle error
+		log.Debugf("[Bleeding] #1Connect to golang.org failed")
+	} else {
+		log.Debugf("[Bleeding] #1 Connect succeeded!")
+		log.Debugf("[Bleeding] #1 Response: %v", resp)
+	}
+
+	restore, err := applyNS(netns)
+	resp, err = http.Get("http://pages.cs.wisc.edu/")
+	if err != nil {
+		// handle error
+		log.Debugf("[Bleeding] #2 Connect to golang.org failed")
+	} else {
+		log.Debugf("[Bleeding] #2 Connect succeeded!")
+		log.Debugf("[Bleeding] #2 Response: %v", resp)
+	}
+
+	log.Infof("[Guard] NetNS fd: %v, curPID: ", netns, os.Getpid())
+	if err != nil {
+		log.Infof("[Guard] Failed to join host net namespace: %v", err)
+	}
+
 	id := get_func_name() + strconv.FormatInt(get_time(), 10)
 	log.Infof("Started Guard with id: " + id)
 	fname := get_func_name()
@@ -441,6 +544,7 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int) {
 
 		case <-ctr:
 			log.Infof("[Guard] Exiting the go routine")
+			restore()
 			break
 
 		case recv := <-updater.RecvChan:

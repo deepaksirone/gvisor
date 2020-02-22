@@ -248,6 +248,9 @@ type Kernel struct {
 
 	//Controller Channel
 	guardCtrChan chan int
+
+	// Default Network namespace fd
+	defaultNetFD int
 }
 
 // InitKernelArgs holds arguments to Init.
@@ -294,6 +297,9 @@ type InitKernelArgs struct {
 
 	// PIDNamespace is the root PID namespace.
 	PIDNamespace *PIDNamespace
+
+	// Default Network namespace fd
+	DefaultNetFD int
 }
 
 // Init initialize the Kernel with no tasks.
@@ -323,6 +329,8 @@ func (k *Kernel) Init(args InitKernelArgs) error {
 	k.rootAbstractSocketNamespace = args.RootAbstractSocketNamespace
 	k.networkStack = args.NetworkStack
 	k.applicationCores = args.ApplicationCores
+	k.defaultNetFD = args.DefaultNetFD
+
 	if args.UseHostCores {
 		k.useHostCores = true
 		maxCPU, err := hostcpu.MaxPossibleCPU()
@@ -927,7 +935,7 @@ func (k *Kernel) Start() error {
 	k.resumeTimeLocked()
 	// Start task goroutines.
 	k.tasks.mu.RLock()
-	go k.guard.Run(k.guardChan, k.guardCtrChan)
+	go k.guard.Run(k.guardChan, k.guardCtrChan, k.defaultNetFD)
 	//k.guard.SendKeyInitReq()
 	//<-k.guardCtrChan
 	defer k.tasks.mu.RUnlock()

@@ -171,6 +171,8 @@ type Args struct {
 	TotalMem uint64
 	// UserLogFD is the file descriptor to write user logs to.
 	UserLogFD int
+	// Default network namespace fd
+	DefaultNetFD int
 }
 
 // New initializes a new kernel loader configured by spec.
@@ -284,6 +286,7 @@ func New(args Args) (*Loader, error) {
 		RootIPCNamespace:            kernel.NewIPCNamespace(creds.UserNamespace),
 		RootAbstractSocketNamespace: kernel.NewAbstractSocketNamespace(),
 		PIDNamespace:                kernel.NewRootPIDNamespace(creds.UserNamespace),
+		DefaultNetFD:                args.DefaultNetFD,
 	}); err != nil {
 		return nil, fmt.Errorf("initializing kernel: %v", err)
 	}

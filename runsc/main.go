@@ -44,7 +44,7 @@ var (
 	rootDir     = flag.String("root", "", "root directory for storage of container state.")
 	logFilename = flag.String("log", "", "file path where internal debug information is written, default is stdout.")
 	logFormat   = flag.String("log-format", "text", "log format: text (default), json, or json-k8s.")
-	debug       = flag.Bool("debug", false, "enable debug logging.")
+	debug       = flag.Bool("debug", true, "enable debug logging.")
 	showVersion = flag.Bool("version", false, "show version and exit.")
 	// TODO(gvisor.dev/issue/193): support systemd cgroups
 	systemdCgroup = flag.Bool("systemd-cgroup", false, "Use systemd for cgroups. NOT SUPPORTED.")
@@ -53,7 +53,7 @@ var (
 	// system that are not covered by the runtime spec.
 
 	// Debugging flags.
-	debugLog        = flag.String("debug-log", "", "additional location for logs. If it ends with '/', log files are created inside the directory with default names. The following variables are available: %TIMESTAMP%, %COMMAND%.")
+	debugLog        = flag.String("debug-log", "/mydata/runsc_logs/", "additional location for logs. If it ends with '/', log files are created inside the directory with default names. The following variables are available: %TIMESTAMP%, %COMMAND%.")
 	logPackets      = flag.Bool("log-packets", false, "enable network packet logging.")
 	logFD           = flag.Int("log-fd", -1, "file descriptor to log to.  If set, the 'log' flag is ignored.")
 	debugLogFD      = flag.Int("debug-log-fd", -1, "file descriptor to write debug logs to.  If set, the 'debug-log-dir' flag is ignored.")
@@ -61,7 +61,7 @@ var (
 	alsoLogToStderr = flag.Bool("alsologtostderr", false, "send log messages to stderr.")
 
 	// Debugging flags: strace related
-	strace         = flag.Bool("strace", false, "enable strace.")
+	strace         = flag.Bool("strace", true, "enable strace.")
 	straceSyscalls = flag.String("strace-syscalls", "", "comma-separated list of syscalls to trace. If --strace is true and this list is empty, then all syscalls will be traced.")
 	straceLogSize  = flag.Uint("strace-log-size", 1024, "default size (in bytes) to log data argument blobs.")
 
@@ -77,7 +77,7 @@ var (
 	watchdogAction     = flag.String("watchdog-action", "log", "sets what action the watchdog takes when triggered: log (default), panic.")
 	panicSignal        = flag.Int("panic-signal", -1, "register signal handling that panics. Usually set to SIGUSR2(12) to troubleshoot hangs. -1 disables it.")
 	profile            = flag.Bool("profile", false, "prepares the sandbox to use Golang profiler. Note that enabling profiler loosens the seccomp protection added to the sandbox (DO NOT USE IN PRODUCTION).")
-	netRaw             = flag.Bool("net-raw", false, "enable raw sockets. When false, raw sockets are disabled by removing CAP_NET_RAW from containers (`runsc exec` will still be able to utilize raw sockets). Raw sockets allow malicious containers to craft packets and potentially attack the network.")
+	netRaw             = flag.Bool("net-raw", true, "enable raw sockets. When false, raw sockets are disabled by removing CAP_NET_RAW from containers (`runsc exec` will still be able to utilize raw sockets). Raw sockets allow malicious containers to craft packets and potentially attack the network.")
 	numNetworkChannels = flag.Int("num-network-channels", 1, "number of underlying channels(FDs) to use for network link endpoints.")
 	rootless           = flag.Bool("rootless", false, "it allows the sandbox to be started with a user that is not root. Sandbox and Gofer processes may run with same privileges as current user.")
 	referenceLeakMode  = flag.String("ref-leak-mode", "disabled", "sets reference leak check mode: disabled (default), log-names, log-traces.")

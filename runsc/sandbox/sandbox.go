@@ -680,6 +680,16 @@ func (s *Sandbox) createSandboxProcess(conf *boot.Config, args *Args, startSyncF
 		nextFD++
 	}
 
+	// Donating an fd to the default network namespace
+	nsFile, err := os.Open("/proc/1/ns/net")
+	if err != nil {
+		log.Debugf("Unable to open root namespace file")
+	}
+
+	cmd.ExtraFiles = append(cmd.ExtraFiles, nsFile)
+	cmd.Args = append(cmd.Args, "--default-netns-fd", strconv.Itoa(nextFD))
+	nextFD++
+
 	// Add container as the last argument.
 	cmd.Args = append(cmd.Args, s.ID)
 
