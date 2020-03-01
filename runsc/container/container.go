@@ -322,22 +322,30 @@ func New(conf *boot.Config, args Args) (*Container, error) {
 		}
 		if err := runInCgroup(cg, func() error {
 			ioFiles, specFile, err := c.createGoferProcess(args.Spec, conf, args.BundleDir)
+			log.Debugf("[Seclambda] Creating Seclambda Proxy")
 			if err != nil {
 				return err
+			}
+
+			sandBox2seclambdaSend, seclambda2SandboxRecv, e := c.createSeclambdaProxy("node4.kubernetes.cs799-serverless-pg0.wisc.cloudlab.us", 5000, conf)
+			if e != nil {
+				return e
 			}
 
 			// Start a new sandbox for this container. Any errors after this point
 			// must destroy the container.
 			sandArgs := &sandbox.Args{
-				ID:            args.ID,
-				Spec:          args.Spec,
-				BundleDir:     args.BundleDir,
-				ConsoleSocket: args.ConsoleSocket,
-				UserLog:       args.UserLog,
-				IOFiles:       ioFiles,
-				MountsFile:    specFile,
-				Cgroup:        cg,
-				Attached:      args.Attached,
+				ID:                    args.ID,
+				Spec:                  args.Spec,
+				BundleDir:             args.BundleDir,
+				ConsoleSocket:         args.ConsoleSocket,
+				UserLog:               args.UserLog,
+				IOFiles:               ioFiles,
+				MountsFile:            specFile,
+				Cgroup:                cg,
+				Attached:              args.Attached,
+				SandBox2seclambdaSend: sandBox2seclambdaSend,
+				Seclambda2SandboxRecv: seclambda2SandboxRecv,
 			}
 			sand, err := sandbox.New(conf, sandArgs)
 			if err != nil {
@@ -862,6 +870,69 @@ func (c *Container) waitForStopped() error {
 		return nil
 	}
 	return backoff.Retry(op, b)
+}
+
+func (c *Container) createSeclambdaProxy(controller string, controllerPort int, conf *boot.Config) (*os.File, *os.File, error) {
+	nextFD := 3
+
+	args := conf.ToFlags()
+	var seclambdaEnds []*os.File
+
+	fds_sandboxside, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	args = append(args, "seclambda", "--address="+controller)
+	args = append(args, "--port="+strconv.Itoa(controllerPort))
+
+	sandBox2seclambdaRecv := os.NewFile(uintptr(fds_sandboxside[1]), "sandBox2seclambdaRecv IO FD")
+	seclambdaEnds = append(seclambdaEnds, sandBox2seclambdaRecv)
+	args = append(args, fmt.Sprintf("--io-fds=%d", nextFD))
+	nextFD++
+
+	sandBox2seclambdaSend := os.NewFile(uintptr(fds_sandboxside[0]), "sandBox2seclambdaSend FD")
+
+	fds_seclambdaside, er := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
+	if er != nil {
+		return nil, nil, err
+	}
+
+	seclambda2SandboxRecv := os.NewFile(uintptr(fds_seclambdaside[0]), "seclambda2SandboxRecv fd")
+	seclambda2SandboxSend := os.NewFile(uintptr(fds_seclambdaside[1]), "seclambda2SandboxSend fd")
+	seclambdaEnds = append(seclambdaEnds, seclambda2SandboxSend)
+	args = append(args, fmt.Sprintf("--io-fds=%d", nextFD))
+	nextFD++
+
+	defer sandBox2seclambdaRecv.Close()
+	defer seclambda2SandboxSend.Close()
+
+	binPath := specutils.ExePath
+	cmd := exec.Command(binPath, args...)
+	cmd.ExtraFiles = seclambdaEnds
+	cmd.Args[0] = "runsc-seclambda"
+
+	// Enter new namespaces to isolate from the rest of the system. Don't unshare
+	// cgroup because gofer is added to a cgroup in the caller's namespace.
+	// Enter the root network namespace
+	nss := []specs.LinuxNamespace{
+		{Type: specs.IPCNamespace},
+		{Type: specs.MountNamespace},
+		{Type: specs.NetworkNamespace, Path: "/proc/1/ns/net"},
+		{Type: specs.PIDNamespace},
+		{Type: specs.UTSNamespace},
+	}
+
+	// Start the gofer in the given namespace.
+	log.Debugf("Starting Seclambda: %s %v", binPath, args)
+	if err := specutils.StartInNS(cmd, nss); err != nil {
+		return nil, nil, fmt.Errorf("Seclambda: %v", err)
+	}
+	log.Infof("Seclambda started, PID: %d", cmd.Process.Pid)
+	//c.GoferPid = cmd.Process.Pid
+	//c.goferIsChild = true
+	return sandBox2seclambdaSend, seclambda2SandboxRecv, nil
+
 }
 
 func (c *Container) createGoferProcess(spec *specs.Spec, conf *boot.Config, bundleDir string) ([]*os.File, *os.File, error) {

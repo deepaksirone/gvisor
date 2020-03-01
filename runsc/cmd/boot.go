@@ -87,6 +87,10 @@ type Boot struct {
 
 	// pidns is set if the sanadbox is in its own pid namespace.
 	pidns bool
+
+	sandbox2SeclamdaSendFD int
+
+	seclambda2SandboxRecvFD int
 }
 
 // Name implements subcommands.Command.Name.
@@ -122,6 +126,8 @@ func (b *Boot) SetFlags(f *flag.FlagSet) {
 	f.IntVar(&b.startSyncFD, "start-sync-fd", -1, "required FD to used to synchronize sandbox startup")
 	f.IntVar(&b.defaultNetFD, "default-netns-fd", -1, "FD to the PID 1 processes' net namespace")
 	f.IntVar(&b.mountsFD, "mounts-fd", -1, "mountsFD is the file descriptor to read list of mounts after they have been resolved (direct paths, no symlinks).")
+	f.IntVar(&b.sandbox2SeclamdaSendFD, "sandbox2seclambda-fd", -1, "FD for sandbox to seclambda kernel messages")
+	f.IntVar(&b.seclambda2SandboxRecvFD, "seclambda2sandbox-fd", -1, "FD for seclambda to sandbox decision messages")
 }
 
 // Execute implements subcommands.Command.Execute.  It starts a sandbox in a
@@ -215,23 +221,30 @@ func (b *Boot) Execute(_ context.Context, f *flag.FlagSet, args ...interface{}) 
 
 	// Create the loader.
 	bootArgs := boot.Args{
-		ID:           f.Arg(0),
-		Spec:         spec,
-		Conf:         conf,
-		ControllerFD: b.controllerFD,
-		Device:       os.NewFile(uintptr(b.deviceFD), "platform device"),
-		GoferFDs:     b.ioFDs.GetArray(),
-		StdioFDs:     b.stdioFDs.GetArray(),
-		Console:      b.console,
-		NumCPU:       b.cpuNum,
-		TotalMem:     b.totalMem,
-		UserLogFD:    b.userLogFD,
-		DefaultNetFD: b.defaultNetFD,
+		ID:                  f.Arg(0),
+		Spec:                spec,
+		Conf:                conf,
+		ControllerFD:        b.controllerFD,
+		Device:              os.NewFile(uintptr(b.deviceFD), "platform device"),
+		GoferFDs:            b.ioFDs.GetArray(),
+		StdioFDs:            b.stdioFDs.GetArray(),
+		Console:             b.console,
+		NumCPU:              b.cpuNum,
+		TotalMem:            b.totalMem,
+		UserLogFD:           b.userLogFD,
+		Sandbox2seclambdaFD: b.sandbox2SeclamdaSendFD,
+		Seclambda2sandboxFD: b.seclambda2SandboxRecvFD,
 	}
 	l, err := boot.New(bootArgs)
 	if err != nil {
 		Fatalf("creating loader: %v", err)
 	}
+
+	/*
+		seclamdaFile := os.NewFile(uintptr(b.sandbox2SeclamdaSendFD), "sandbox-sendFD")
+		if m, er := seclamdaFile.Write([]byte{1, 2, 3}); er != nil || m != 3 {
+			log.Infof("[Seclambda] Unable to write to seclambda file")
+		}*/
 
 	// Fatalf exits the process and doesn't run defers.
 	// 'l' must be destroyed explicitly after this point!

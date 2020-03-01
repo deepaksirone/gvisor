@@ -32,6 +32,7 @@ go_library(
         "start.go",
         "state.go",
         "syscalls.go",
+	"seclambda.go",
         "wait.go",
     ],
     visibility = [
@@ -50,6 +51,7 @@ go_library(
         "//runsc/boot/platforms",
         "//runsc/console",
         "//runsc/container",
+	"//runsc/seclambda",
         "//runsc/flag",
         "//runsc/fsgofer",
         "//runsc/fsgofer/filter",

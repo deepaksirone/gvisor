@@ -1,20 +1,21 @@
-package guard
+package seclambda
 
 import (
-	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	zmq "github.com/deepaksirone/goczmq"
-	"runtime"
+	//"runtime"
 	//"github.com/grpc/grpc-go"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
-	"golang.org/x/sys/unix"
+	"encoding/gob"
+	//specs "github.com/opencontainers/runtime-spec/specs-go"
+	//"golang.org/x/sys/unix"
 	"gvisor.dev/gvisor/pkg/log"
-	"gvisor.dev/gvisor/runsc/specutils"
+	//"gvisor.dev/gvisor/runsc/specutils"
 	//"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 )
 
@@ -23,8 +24,6 @@ const (
 	ipWhitelist  int = 1
 	urlWhitelist int = 2
 )
-
-var msgID = int64(0)
 
 type Guard struct {
 	id int
@@ -60,6 +59,10 @@ type Guard struct {
 	graph *ListNode
 	// Current State
 	curState *ListNode
+	// Sandbox2seclambda FD
+	sandboxSide int
+	// Seclambda2sandbox FD
+	seclambdaSide int
 }
 
 type Policy struct {
@@ -78,19 +81,12 @@ type KernMsg struct {
 	EventName [4]byte
 	MetaData  []byte
 	Data      []byte
-	RecvChan  chan int
-}
-
-type transMsg struct {
-	EventName [4]byte
-	MetaData  []byte
-	Data      []byte
-	MsgID     int64
 	IsExit    bool
+	MsgID     int64
 }
 
 type ReturnMsg struct {
-	allowed bool
+	Allowed bool
 	MsgID   int64
 }
 
@@ -149,20 +145,22 @@ func (g *Guard) get_event_id(event_hash int64) (int, bool) {
 	return id, present
 }
 
-func New(ctrIP string, ctrPort int64) Guard {
+func New(ctrIP string, ctrPort int, sandboxSide int, seclambdaSide int) Guard {
 	var g Guard
 	g.startTime = get_time()
 	g.requestNo = 0
 	g.ioNo = 0
 	g.runningTime = 0
 	g.ctrIP = ctrIP
-	g.ctrPort = ctrPort
+	g.ctrPort = int64(ctrPort)
 	g.eventMap = make(map[int64]int)
 	g.ioWhitelist = make(map[string]int)
 	g.ipWhitelist = make(map[string]int)
 	g.urlWhitelist = make(map[string]int)
 	g.stateTable = make(map[string]int)
 	g.policyTable = make(map[string]*ListNode)
+	g.sandboxSide = sandboxSide
+	g.seclambdaSide = seclambdaSide
 
 	return g
 }
@@ -311,17 +309,6 @@ func (g *Guard) PolicyInit() {
 	g.curState = g.graph
 }
 
-func makeTransMsg(msg KernMsg) transMsg {
-	var m transMsg
-	m.EventName = msg.EventName
-	m.MetaData = msg.MetaData
-	m.Data = msg.Data
-	m.IsExit = false
-	m.MsgID = msgID
-	msgID += 1
-	return m
-}
-
 func (g *Guard) CheckPolicy(event_id int) bool {
 	fname := get_func_name()
 	_, present := g.policyTable[fname]
@@ -358,6 +345,7 @@ func (g *Guard) CheckPolicy(event_id int) bool {
 	return false
 }
 
+/*
 func (g *Guard) SendKeyInitReq() (string, *zmq.Channeler) {
 	id := get_func_name() + strconv.FormatInt(get_time(), 10)
 	log.Infof("[Guard] SendKeyInitReq starting")
@@ -370,6 +358,7 @@ func (g *Guard) SendKeyInitReq() (string, *zmq.Channeler) {
 	return id, updater
 }
 
+/*
 func joinNetNS(nsPath string) (func(), error) {
 	runtime.LockOSThread()
 	restoreNS, err := specutils.ApplyNS(specs.LinuxNamespace{
@@ -384,15 +373,15 @@ func joinNetNS(nsPath string) (func(), error) {
 		restoreNS()
 		runtime.UnlockOSThread()
 	}, nil
-}
-
+}*/
+/*
 func applyNS(nsFD int) (func(), error) {
 	runtime.LockOSThread()
 	log.Infof("Applying namespace network root curPid: %v", os.Getpid())
 	newNS := os.NewFile(uintptr(nsFD), "root-ns")
-	/*if err != nil {
-		return nil, fmt.Errorf("error opening %q: %v", ns.Path, err)
-	}*/
+	//if err != nil {
+	//	return nil, fmt.Errorf("error opening %q: %v", ns.Path, err)
+	//}
 	defer newNS.Close()
 
 	// Store current namespace to restore back.
@@ -416,7 +405,7 @@ func applyNS(nsFD int) (func(), error) {
 		}
 	}, nil
 }
-
+/*
 func nsCloneFlag(nst specs.LinuxNamespaceType) uintptr {
 	switch nst {
 	case specs.IPCNamespace:
@@ -444,31 +433,22 @@ func setNS(fd, nsType uintptr) error {
 	}
 	return nil
 }
-
-func receiveSeclambdaMsgs(seclambdaSide int, replyChan chan ReturnMsg) {
-
-	seclambdaFile := os.NewFile(uintptr(seclambdaSide), "seclambda-file")
-	decoder := gob.NewDecoder(seclambdaFile)
+*/
+func handleSandbox(sandboxSide int, ch chan KernMsg) {
+	sandboxFile := os.NewFile(uintptr(sandboxSide), "sandbox-fd")
+	dec := gob.NewDecoder(sandboxFile)
 	for {
-		var q ReturnMsg
-		err := decoder.Decode(&q)
-		if err != nil {
-			// Other end closed the file
-			log.Infof("[Guard] Killing receiveSeclambdaMsgs")
+		var msg KernMsg
+		dec.Decode(&msg)
+		ch <- msg
+		if msg.IsExit {
+			// Kill of this go routine if the sandbox is exiting
 			break
 		}
-		replyChan <- q
 	}
 }
 
-func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSide int) {
-
-	sandboxFile := os.NewFile(uintptr(sandboxSide), "sandbox-file")
-	encoder := gob.NewEncoder(sandboxFile)
-	replyChan := make(chan ReturnMsg)
-	eventChanMap := make(map[int64]chan int)
-
-	go receiveSeclambdaMsgs(seclambdaSide, replyChan)
+func (g *Guard) Run(wg *sync.WaitGroup) {
 	// Connect to the controller
 	/*
 		resp, err := http.Get("http://pages.cs.wisc.edu/")
@@ -494,14 +474,24 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSid
 		if err != nil {
 			log.Infof("[Guard] Failed to join host net namespace: %v", err)
 		}
+	*/
+	// TODO: Need to find how to get the function name
 
-		id := get_func_name() + strconv.FormatInt(get_time(), 10)
-		log.Infof("Started Guard with id: " + id)
-		fname := get_func_name()
-		idOpt := zmq.SockSetIdentity(id)
-		updater := zmq.NewDealerChanneler("tcp://node4.kubernetes.cs799-serverless-pg0.wisc.cloudlab.us:5000", idOpt)
-		rid := get_inst_id()*/
+	id := get_func_name() + strconv.FormatInt(get_time(), 10)
+	ch := make(chan KernMsg)
+	replyFile := os.NewFile(uintptr(g.seclambdaSide), "seclambdaSide")
+	encoder := gob.NewEncoder(replyFile)
 
+	// Create the sandbox handling end
+	go handleSandbox(g.sandboxSide, ch)
+
+	log.Infof("[Seclambda] Started Guard with id: " + id)
+	fname := get_func_name()
+	idOpt := zmq.SockSetIdentity(id)
+	log.Infof("[Seclambda] Attempting to connect to %v at port: %v", g.ctrIP, g.ctrPort)
+
+	updater := zmq.NewDealerChanneler("tcp://"+g.ctrIP+":"+strconv.FormatInt(g.ctrPort, 10), idOpt)
+	rid := get_inst_id()
 	/*
 		if err != nil {
 			log.Infof("[ZMQ] Error attaching to Controller")
@@ -512,10 +502,10 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSid
 			log.Infof("Error connecting to Controller")
 		}*/
 
-	log.Infof("[Guard] Started Guard")
-	//keyInitMsg := MsgInit([]byte(id))
+	//log.Infof("[Seclambda] Started Guard with id: " + id)
+	keyInitMsg := MsgInit([]byte(id))
 	//log.Infof("Sending message: " + keyInitMsg)
-	//updater.SendChan <- [][]byte{keyInitMsg}
+	updater.SendChan <- [][]byte{keyInitMsg}
 
 	/*
 		if er != nil {
@@ -534,7 +524,10 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSid
 		defer conn.Close()
 		c := pb.NewGreeterClient(conn)
 	*/
-	//log.Infof("[Guard] Send KeyInitReq to controller " + fname)
+	log.Infof("[Seclambda] Send KeyInitReq to controller " + fname)
+	defer wg.Done()
+	defer replyFile.Close()
+
 	//recv := <-updater.RecvChan
 	//log.Infof("[Guard] Received: %s", string(recv[0]))
 
@@ -543,111 +536,109 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSid
 		// and break out of this loop
 		select {
 		case msg := <-ch:
-			log.Infof("[Guard] Received a message from the kernel")
-			log.Infof("[Guard] The message struct : %v", msg)
+			log.Infof("[Seclambda] Received a message from the kernel")
+			log.Infof("[Seclambda] The message struct : %v", msg)
+			if msg.IsExit {
+				// Kill the go routine on kernel exit message
+				log.Infof("[Seclambda] Exiting the go-routine")
+				break
+			}
 			g.requestNo += 1
-
-			trans := makeTransMsg(msg)
-			eventChanMap[trans.MsgID] = msg.RecvChan
-			encoder.Encode(&trans)
-
+			replied := false
 			/*
-				replied := false
-				/*
-					if len(msg.Data) == 0 {
-						//msg.RecvChan <- 0 // [TODO] Respond with appropriate error
-						continue
-					}*/
-			/*
-				event := string(msg.EventName[:])
-				if event == "CHCK" {
-					SendToCtr(updater, TYPE_CHECK_STATUS, ACTION_NOOP, []byte(fname))
-					msg.RecvChan <- 1 //[TODO] Need to augment this structure
-					replied = true
+				if len(msg.Data) == 0 {
+					//msg.RecvChan <- 0 // [TODO] Respond with appropriate error
 					continue
-				}
-
-				meta := string(msg.MetaData)
-				out := fmt.Sprintf("%s:%s:%s:%s", fname, event, meta, string(rid))
-				log.Infof("[Guard] Out string: %s", out)
-
-				info := strings.Split(meta, ":")
-				log.Infof("[Guard] info[0]: %v, info[1]: %v", info[0], info[1])
-				ev_hash := djb2hash(fname, event, info[0], info[1])
-				ev_id, present := g.get_event_id(int64(ev_hash))
-				if event == "GETE" {
-					SendToCtr(updater, TYPE_CHECK_EVENT, ACTION_NOOP, []byte(out))
-					msg.RecvChan <- 1
-					replied = true
-				} else if event == "ENDE" {
-					g.PolicyInit()
-					msg.RecvChan <- 1 // [TODO] Send an empty message to the hypercall
-					replied = true
-					SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
-				} else if event == "SEND" || event == "RESP" {
-					if present && g.CheckPolicy(ev_id) {
-						msg.RecvChan <- 1
-						SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
-					} else {
-
-						log.Infof("[Guard] Event: %v not present or not allowed by policy", ev_id)
-						msg.RecvChan <- 0
-						SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
-					}
-					replied = true
-				}
-
-				if !replied {
-					msg.RecvChan <- 0 //[TODO] Invalid message!
 				}*/
-
-		case <-ctr:
-			log.Infof("[Guard] Exiting the go routine")
-			encoder.Encode(&transMsg{IsExit: true})
-			//restore()
-			break
-
-		case recv := <-replyChan:
-			if recv.allowed {
-				eventChanMap[recv.MsgID] <- 1
-			} else {
-				eventChanMap[recv.MsgID] <- 0
+			event := string(msg.EventName[:])
+			if event == "CHCK" {
+				SendToCtr(updater, TYPE_CHECK_STATUS, ACTION_NOOP, []byte(fname))
+				//TODO: Change this to a seclambdaFD comm
+				encoder.Encode(ReturnMsg{Allowed: true, MsgID: msg.MsgID})
+				//msg.RecvChan <- 1 //[TODO] Need to augment this structure
+				replied = true
+				continue
 			}
 
-			delete(eventChanMap, recv.MsgID)
-			/*
-				if len(recv[0]) <= 1 {
-					continue
+			meta := string(msg.MetaData)
+			out := fmt.Sprintf("%s:%s:%s:%s", fname, event, meta, string(rid))
+			log.Infof("[Seclambda] Out string: %s", out)
+
+			info := strings.Split(meta, ":")
+			log.Infof("[Seclambda] info[0]: %v, info[1]: %v", info[0], info[1])
+			ev_hash := djb2hash(fname, event, info[0], info[1])
+			ev_id, present := g.get_event_id(int64(ev_hash))
+			if event == "GETE" {
+				SendToCtr(updater, TYPE_CHECK_EVENT, ACTION_NOOP, []byte(out))
+				// TODO: Change this to a seclambdaFD comm
+				encoder.Encode(ReturnMsg{Allowed: true, MsgID: msg.MsgID})
+				//msg.RecvChan <- 1
+				replied = true
+			} else if event == "ENDE" {
+				g.PolicyInit()
+				//TODO: Change this to a seclambdaFD comm
+				encoder.Encode(ReturnMsg{Allowed: true, MsgID: msg.MsgID})
+				//msg.RecvChan <- 1 // [TODO] Send an empty message to the hypercall
+				replied = true
+				SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
+			} else if event == "SEND" || event == "RESP" {
+				if present && g.CheckPolicy(ev_id) {
+					//TODO: Change this to a seclambdaFD comm
+					encoder.Encode(ReturnMsg{Allowed: true, MsgID: msg.MsgID})
+					//msg.RecvChan <- 1
+					SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
+				} else {
+					log.Infof("[Seclambda] Event: %v not present or not allowed by policy", ev_id)
+					//TODO: Change this to a seclambdaFD comm
+					encoder.Encode(ReturnMsg{Allowed: false, MsgID: msg.MsgID})
+					//msg.RecvChan <- 0
+					SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
 				}
-				msg := MsgParser(recv[0])
-				typ := msg.header.typ
-				action := msg.header.action
-				//msg.header.length[MAX_LEN_SIZE] = 0
-				_, err := strconv.ParseInt(string(msg.header.length[:MAX_LEN_SIZE]), 16, 64)
-				if err != nil {
-					log.Infof("[Guard] failed to parse message length: %s", string(msg.header.length[:]))
+				replied = true
+			}
+
+			if !replied {
+				//TODO: Change this to a seclambdaFD comm
+				encoder.Encode(ReturnMsg{Allowed: false, MsgID: msg.MsgID})
+				//msg.RecvChan <- 0 //[TODO] Invalid message!
+			}
+
+		// Currently not using seclambdaSide because controller decisions are not used
+		case recv := <-updater.RecvChan:
+			if len(recv[0]) <= 1 {
+				continue
+			}
+			msg := MsgParser(recv[0])
+			typ := msg.header.typ
+			action := msg.header.action
+			//msg.header.length[MAX_LEN_SIZE] = 0
+			_, err := strconv.ParseInt(string(msg.header.length[:MAX_LEN_SIZE]), 16, 64)
+			if err != nil {
+				log.Infof("[Seclambda] failed to parse message length: %s", string(msg.header.length[:]))
+			}
+			switch typ {
+			case TYPE_KEY_DIST:
+				keyInitHandler(msg.body)
+				log.Infof("[Seclambda] Registered Keys: " + fname)
+				SendToCtr(updater, TYPE_POLICY, ACTION_POLICY_INIT, []byte(fname))
+			case TYPE_POLICY:
+				if action == ACTION_POLICY_ADD {
+					g.PolicyInitHandler(msg.body)
+					log.Infof("[Seclambda] Finish registration; get policy")
+					//ctr <- 1
 				}
-				switch typ {
-				case TYPE_KEY_DIST:
-					keyInitHandler(msg.body)
-					log.Infof("[Guard] Registered Keys: " + fname)
-					SendToCtr(updater, TYPE_POLICY, ACTION_POLICY_INIT, []byte(fname))
-				case TYPE_POLICY:
-					if action == ACTION_POLICY_ADD {
-						g.PolicyInitHandler(msg.body)
-						log.Infof("[Guard] Finish registration; get policy")
-						//ctr <- 1
-					}
-				case TYPE_CHECK_RESP:
-					log.Infof("[Guard] Get Check Resp")
-				case TYPE_CHECK_STATUS:
-					log.Infof("[Guard] Send status to guard")
-					g.runningTime = uint64(get_time() - g.startTime)
-					s := strconv.FormatInt(int64(g.requestNo), 10) + string(":") + strconv.FormatUint(g.runningTime, 10)
-					SendToCtr(updater, TYPE_CHECK_STATUS, ACTION_GD_RESP, []byte(s))
-				case TYPE_TEST:
-			*/
-		default:
+			case TYPE_CHECK_RESP:
+				log.Infof("[Seclambda] Get Check Resp")
+			case TYPE_CHECK_STATUS:
+				log.Infof("[Seclambda] Send status to guard")
+				g.runningTime = uint64(get_time() - g.startTime)
+				s := strconv.FormatInt(int64(g.requestNo), 10) + string(":") + strconv.FormatUint(g.runningTime, 10)
+				SendToCtr(updater, TYPE_CHECK_STATUS, ACTION_GD_RESP, []byte(s))
+			case TYPE_TEST:
+
+			default:
+
+			}
 
 		}
 

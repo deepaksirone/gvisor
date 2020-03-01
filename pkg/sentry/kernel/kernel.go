@@ -249,8 +249,9 @@ type Kernel struct {
 	//Controller Channel
 	guardCtrChan chan int
 
-	// Default Network namespace fd
-	defaultNetFD int
+	Sandbox2seclambdaFD int
+
+	Seclambda2sandboxFD int
 }
 
 // InitKernelArgs holds arguments to Init.
@@ -300,6 +301,10 @@ type InitKernelArgs struct {
 
 	// Default Network namespace fd
 	DefaultNetFD int
+
+	Sandbox2seclambdaFD int
+
+	Seclambda2sandboxFD int
 }
 
 // Init initialize the Kernel with no tasks.
@@ -329,7 +334,8 @@ func (k *Kernel) Init(args InitKernelArgs) error {
 	k.rootAbstractSocketNamespace = args.RootAbstractSocketNamespace
 	k.networkStack = args.NetworkStack
 	k.applicationCores = args.ApplicationCores
-	k.defaultNetFD = args.DefaultNetFD
+	k.Seclambda2sandboxFD = args.Seclambda2sandboxFD
+	k.Sandbox2seclambdaFD = args.Sandbox2seclambdaFD
 
 	if args.UseHostCores {
 		k.useHostCores = true
@@ -935,7 +941,7 @@ func (k *Kernel) Start() error {
 	k.resumeTimeLocked()
 	// Start task goroutines.
 	k.tasks.mu.RLock()
-	go k.guard.Run(k.guardChan, k.guardCtrChan, k.defaultNetFD)
+	go k.guard.Run(k.guardChan, k.guardCtrChan, k.Sandbox2seclambdaFD, k.Seclambda2sandboxFD)
 	//k.guard.SendKeyInitReq()
 	//<-k.guardCtrChan
 	defer k.tasks.mu.RUnlock()
@@ -1109,7 +1115,7 @@ func (k *Kernel) decRunningTasks() {
 // WaitExited blocks until all tasks in k have exited.
 func (k *Kernel) WaitExited() {
 	k.tasks.liveGoroutines.Wait()
-	k.guardCtrChan <- 1 // Kill the guard after all tasks have exited
+	//k.guardCtrChan <- 1 // Kill the guard after all tasks have exited
 }
 
 // Kill requests that all tasks in k immediately exit as if group exiting with

@@ -53,7 +53,7 @@ var (
 	// system that are not covered by the runtime spec.
 
 	// Debugging flags.
-	debugLog        = flag.String("debug-log", "/mydata/runsc_logs/", "additional location for logs. If it ends with '/', log files are created inside the directory with default names. The following variables are available: %TIMESTAMP%, %COMMAND%.")
+	debugLog        = flag.String("debug-log", "", "additional location for logs. If it ends with '/', log files are created inside the directory with default names. The following variables are available: %TIMESTAMP%, %COMMAND%.")
 	logPackets      = flag.Bool("log-packets", false, "enable network packet logging.")
 	logFD           = flag.Int("log-fd", -1, "file descriptor to log to.  If set, the 'log' flag is ignored.")
 	debugLogFD      = flag.Int("debug-log-fd", -1, "file descriptor to write debug logs to.  If set, the 'debug-log-dir' flag is ignored.")
@@ -119,6 +119,7 @@ func main() {
 	subcommands.Register(new(cmd.Start), "")
 	subcommands.Register(new(cmd.State), "")
 	subcommands.Register(new(cmd.Wait), "")
+	subcommands.Register(new(cmd.Seclambda), "")
 
 	// Register internal commands with the internal group name. This causes
 	// them to be sorted below the user-facing commands with empty group.

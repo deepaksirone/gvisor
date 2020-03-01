@@ -109,6 +109,10 @@ type Args struct {
 	// Attached indicates that the sandbox lifecycle is attached with the caller.
 	// If the caller exits, the sandbox should exit too.
 	Attached bool
+
+	SandBox2seclambdaSend *os.File
+
+	Seclambda2SandboxRecv *os.File
 }
 
 // New creates the sandbox process. The caller must call Destroy() on the
@@ -681,13 +685,17 @@ func (s *Sandbox) createSandboxProcess(conf *boot.Config, args *Args, startSyncF
 	}
 
 	// Donating an fd to the default network namespace
-	nsFile, err := os.Open("/proc/1/ns/net")
+	/*nsFile, err := os.Open("/proc/1/ns/net")
 	if err != nil {
 		log.Debugf("Unable to open root namespace file")
-	}
+	}*/
 
-	cmd.ExtraFiles = append(cmd.ExtraFiles, nsFile)
-	cmd.Args = append(cmd.Args, "--default-netns-fd", strconv.Itoa(nextFD))
+	cmd.ExtraFiles = append(cmd.ExtraFiles, args.SandBox2seclambdaSend)
+	cmd.Args = append(cmd.Args, "--sandbox2seclambda-fd", strconv.Itoa(nextFD))
+	nextFD++
+
+	cmd.ExtraFiles = append(cmd.ExtraFiles, args.Seclambda2SandboxRecv)
+	cmd.Args = append(cmd.Args, "--seclambda2sandbox-fd", strconv.Itoa(nextFD))
 	nextFD++
 
 	// Add container as the last argument.
