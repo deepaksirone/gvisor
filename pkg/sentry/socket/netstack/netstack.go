@@ -519,6 +519,17 @@ func (i *ioSequencePayload) DropFirst(n int) {
 // Write implements fs.FileOperations.Write.
 func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IOSequence, _ int64) (int64, error) {
 	f := &ioSequencePayload{ctx: ctx, src: src}
+	printBuf := make([]byte, src.NumBytes())
+	// Read till EOF maybe?
+	src.Reader(ctx.(*kernel.Task)).Read(printBuf)
+
+	peerAddr, _, _ := s.GetPeerName(ctx.(*kernel.Task))
+	localAddr, _, _ := s.GetSockName(ctx.(*kernel.Task))
+	// TODO: Implement protocol logging
+
+	log.Infof("[ProxyLogger] Socket Write; Peer Addr: %v, Local Addr: %v", peerAddr, localAddr)
+	log.Infof("[ProxyLogger] Data: %v", printBuf)
+
 	n, resCh, err := s.Endpoint.Write(f, tcpip.WriteOptions{})
 	if err == tcpip.ErrWouldBlock {
 		return 0, syserror.ErrWouldBlock
@@ -2486,6 +2497,17 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 // SendMsg implements the linux syscall sendmsg(2) for sockets backed by
 // tcpip.Endpoint.
 func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []byte, flags int, haveDeadline bool, deadline ktime.Time, controlMessages socket.ControlMessages) (int, *syserr.Error) {
+	printBuf := make([]byte, src.NumBytes())
+	// Read till EOF maybe?
+	src.Reader(t).Read(printBuf)
+
+	peerAddr, _, _ := s.GetPeerName(t)
+	localAddr, _, _ := s.GetSockName(t)
+	// TODO: Implement protocol logging
+
+	log.Infof("[ProxyLogger] Socket SendMsg; Peer Addr: %v, Local Addr: %v", peerAddr, localAddr)
+	log.Infof("[ProxyLogger] Data: %v", printBuf)
+
 	// Reject Unix control messages.
 	if !controlMessages.Unix.Empty() {
 		return 0, syserr.ErrInvalidArgument

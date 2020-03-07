@@ -119,7 +119,7 @@ func main() {
 	subcommands.Register(new(cmd.Start), "")
 	subcommands.Register(new(cmd.State), "")
 	subcommands.Register(new(cmd.Wait), "")
-	subcommands.Register(new(cmd.Seclambda), "")
+	//subcommands.Register(new(cmd.Seclambda), "")
 
 	// Register internal commands with the internal group name. This causes
 	// them to be sorted below the user-facing commands with empty group.
@@ -229,7 +229,7 @@ func main() {
 		CPUNumFromQuota:    *cpuNumFromQuota,
 
 		TestOnlyTestNameEnv:                        *testOnlyTestNameEnv,
-		TestOnlyAllowRunAsCurrentUserWithoutChroot: true,
+		TestOnlyAllowRunAsCurrentUserWithoutChroot: *testOnlyAllowRunAsCurrentUserWithoutChroot,
 	}
 	if len(*straceSyscalls) != 0 {
 		conf.StraceSyscalls = strings.Split(*straceSyscalls, ",")
@@ -306,7 +306,7 @@ func main() {
 	log.Infof("\t\tStrace: %t, max size: %d, syscalls: %s", conf.Strace, conf.StraceLogSize, conf.StraceSyscalls)
 	log.Infof("***************************")
 
-	if true {
+	if *testOnlyAllowRunAsCurrentUserWithoutChroot {
 		// SIGTERM is sent to all processes if a test exceeds its
 		// timeout and this case is handled by syscall_test_runner.
 		log.Warningf("Block the TERM signal. This is only safe in tests!")

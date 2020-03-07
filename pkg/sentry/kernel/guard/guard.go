@@ -2,19 +2,19 @@ package guard
 
 import (
 	"encoding/gob"
-	"encoding/json"
-	"fmt"
-	zmq "github.com/deepaksirone/goczmq"
-	"runtime"
+	//"encoding/json"
+	//"fmt"
+	//zmq "github.com/deepaksirone/goczmq"
+	//"runtime"
 	//"github.com/grpc/grpc-go"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
-	"golang.org/x/sys/unix"
+	//specs "github.com/opencontainers/runtime-spec/specs-go"
+	//"golang.org/x/sys/unix"
 	"gvisor.dev/gvisor/pkg/log"
-	"gvisor.dev/gvisor/runsc/specutils"
+	//"gvisor.dev/gvisor/runsc/specutils"
 	//"net/http"
 	"os"
-	"strconv"
-	"strings"
+	//"strconv"
+	//"strings"
 	"syscall"
 )
 
@@ -94,6 +94,7 @@ type ReturnMsg struct {
 	MsgID   int64
 }
 
+/*
 func get_func_name() string {
 	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") == "" {
 		return string("test0")
@@ -126,14 +127,6 @@ func strip(s string, c byte) string {
 	return res
 }
 
-func get_time() int64 {
-	var r syscall.Timeval
-	err := syscall.Gettimeofday(&r)
-	if err != nil {
-		return 0
-	}
-	return 1000000*r.Sec + int64(r.Usec)
-}
 
 func djb2hash(func_name, event, url, action string) uint64 {
 	inp := func_name + event + url + action
@@ -147,6 +140,22 @@ func djb2hash(func_name, event, url, action string) uint64 {
 func (g *Guard) get_event_id(event_hash int64) (int, bool) {
 	id, present := g.eventMap[event_hash]
 	return id, present
+}
+*/
+func get_func_name() string {
+	if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") == "" {
+		return string("test0")
+	}
+	return os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
+}
+
+func get_time() int64 {
+	var r syscall.Timeval
+	err := syscall.Gettimeofday(&r)
+	if err != nil {
+		return 0
+	}
+	return 1000000*r.Sec + int64(r.Usec)
 }
 
 func New(ctrIP string, ctrPort int64) Guard {
@@ -167,6 +176,7 @@ func New(ctrIP string, ctrPort int64) Guard {
 	return g
 }
 
+/*
 func (g *Guard) Lookup(hash_id int, key string) bool {
 	switch hash_id {
 	case ioWhitelist:
@@ -189,7 +199,7 @@ func KeyInitReq(s *zmq.Sock, guard_id []byte) {
 	s.SendFrame(m, zmq.FlagNone)
 }
 */
-
+/*
 func keyInitHandler(msg []byte) {
 	return
 }
@@ -310,7 +320,7 @@ func (g *Guard) PolicyInit() {
 	}
 	g.curState = g.graph
 }
-
+*/
 func makeTransMsg(msg KernMsg) transMsg {
 	var m transMsg
 	m.EventName = msg.EventName
@@ -322,6 +332,7 @@ func makeTransMsg(msg KernMsg) transMsg {
 	return m
 }
 
+/*
 func (g *Guard) CheckPolicy(event_id int) bool {
 	fname := get_func_name()
 	_, present := g.policyTable[fname]
@@ -390,9 +401,9 @@ func applyNS(nsFD int) (func(), error) {
 	runtime.LockOSThread()
 	log.Infof("Applying namespace network root curPid: %v", os.Getpid())
 	newNS := os.NewFile(uintptr(nsFD), "root-ns")
-	/*if err != nil {
-		return nil, fmt.Errorf("error opening %q: %v", ns.Path, err)
-	}*/
+	///*if err != nil {
+	//	return nil, fmt.Errorf("error opening %q: %v", ns.Path, err)
+	//
 	defer newNS.Close()
 
 	// Store current namespace to restore back.
@@ -443,7 +454,7 @@ func setNS(fd, nsType uintptr) error {
 		return err
 	}
 	return nil
-}
+}*/
 
 func receiveSeclambdaMsgs(seclambdaSide int, replyChan chan ReturnMsg) {
 

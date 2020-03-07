@@ -327,8 +327,14 @@ func New(conf *boot.Config, args Args) (*Container, error) {
 				return err
 			}
 
-			sandBox2seclambdaSend, seclambda2SandboxRecv, e := c.createSeclambdaProxy("node4.kubernetes.cs799-serverless-pg0.wisc.cloudlab.us", 5000, conf)
+			sandBox2seclambdaSend, seclambda2SandboxRecv, e := c.createSeclambdaProxy("node0.controller.cs799-serverless-pg0.utah.cloudlab.us", 5000, conf)
+
+			//if dummyErr := c.createDummyProcess(); dummyErr != nil {
+			//	log.Debugf("[DummyProcess] Error launching : %v", dummyErr)
+			//}
+
 			if e != nil {
+				log.Debugf("[Seclambda] failed to launch")
 				return e
 			}
 
@@ -872,6 +878,35 @@ func (c *Container) waitForStopped() error {
 	return backoff.Retry(op, b)
 }
 
+func (c *Container) createDummyProcess() error {
+	binPath := "/data/projects/compiler/test"
+	cmd := exec.Command(binPath, "")
+	//cmd.ExtraFiles = seclambdaEnds
+	cmd.Args[0] = "runsc-seclambda"
+
+	// Enter new namespaces to isolate from the rest of the system. Don't unshare
+	// cgroup because gofer is added to a cgroup in the caller's namespace.
+	// Enter the root network namespace
+	nss := []specs.LinuxNamespace{
+		{Type: specs.IPCNamespace},
+		{Type: specs.MountNamespace},
+		{Type: specs.NetworkNamespace, Path: "/proc/1/ns/net"},
+		{Type: specs.PIDNamespace},
+		{Type: specs.UTSNamespace},
+	}
+
+	// Start the gofer in the given namespace.
+	log.Debugf("[DummyProcess] Starting %s", binPath)
+	if err := specutils.StartInNS(cmd, nss); err != nil {
+		return fmt.Errorf("[DummyProcess]: %v", err)
+	}
+
+	log.Infof("[DummyProcess] started, PID: %d", cmd.Process.Pid)
+	//c.GoferPid = cmd.Process.Pid
+	//c.goferIsChild = true
+	return nil
+}
+
 func (c *Container) createSeclambdaProxy(controller string, controllerPort int, conf *boot.Config) (*os.File, *os.File, error) {
 	nextFD := 3
 
@@ -907,7 +942,7 @@ func (c *Container) createSeclambdaProxy(controller string, controllerPort int, 
 	defer sandBox2seclambdaRecv.Close()
 	defer seclambda2SandboxSend.Close()
 
-	binPath := specutils.ExePath
+	binPath := "/usr/local/bin/seclambda"
 	cmd := exec.Command(binPath, args...)
 	cmd.ExtraFiles = seclambdaEnds
 	cmd.Args[0] = "runsc-seclambda"
