@@ -626,6 +626,7 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSid
 			}
 
 			delete(eventChanMap, recv.MsgID)
+			log.Infof("[Guard] Getting reply from seclambdaSide: %v", recv)
 			/*
 				if len(recv[0]) <= 1 {
 					continue
@@ -658,8 +659,6 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSid
 					SendToCtr(updater, TYPE_CHECK_STATUS, ACTION_GD_RESP, []byte(s))
 				case TYPE_TEST:
 			*/
-		default:
-
 		}
 
 	}
