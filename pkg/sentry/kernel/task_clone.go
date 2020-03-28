@@ -268,6 +268,7 @@ func (t *Task) Clone(opts *CloneOptions) (ThreadID, *SyscallControl, error) {
 		RSeqAddr:                rseqAddr,
 		RSeqSignature:           rseqSignature,
 		ContainerID:             t.ContainerID(),
+		ContainerName:           t.ContainerName(),
 	}
 	if opts.NewThreadGroup {
 		cfg.Parent = t

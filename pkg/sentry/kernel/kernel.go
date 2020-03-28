@@ -36,6 +36,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -879,6 +880,15 @@ func (k *Kernel) CreateProcess(args CreateProcessArgs) (*ThreadGroup, ThreadID, 
 	// TaskSet.NewTask().
 	args.FDTable.IncRef()
 
+	containerName := ""
+	for _, env := range args.Envv {
+		if strings.HasPrefix(env, "HOSTNAME") {
+			s := strings.SplitN(env, "=", 2)
+			containerName = s[1]
+			break
+		}
+	}
+
 	// Create the task.
 	config := &TaskConfig{
 		Kernel:                  k,
@@ -892,6 +902,7 @@ func (k *Kernel) CreateProcess(args CreateProcessArgs) (*ThreadGroup, ThreadID, 
 		IPCNamespace:            args.IPCNamespace,
 		AbstractSocketNamespace: args.AbstractSocketNamespace,
 		ContainerID:             args.ContainerID,
+		ContainerName:           containerName,
 	}
 	t, err := k.tasks.NewTask(config)
 	if err != nil {

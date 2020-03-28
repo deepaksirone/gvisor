@@ -17,7 +17,7 @@ package sandbox
 import (
 	"fmt"
 	"net"
-	"net/http"
+	//"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -77,15 +77,15 @@ func setupNetwork(conn *urpc.Client, pid int, spec *specs.Spec, conf *boot.Confi
 		if err := createInterfacesAndRoutesFromNS(conn, nsPath, conf.HardwareGSO, conf.SoftwareGSO, conf.NumNetworkChannels); err != nil {
 			return fmt.Errorf("creating interfaces from net namespace %q: %v", nsPath, err)
 		}
-
-		rsp, er := http.Get("http://pages.cs.wisc.edu/")
-		if er != nil {
-			// handle error
-			log.Debugf("[Bleeding] Connect[#2] to golang.org failed")
-		} else {
-			log.Debugf("[Bleeding] Connect[#2] succeeded!")
-			log.Debugf("[Bleeding] Response: %v", rsp)
-		}
+		/*
+			rsp, er := http.Get("http://pages.cs.wisc.edu/")
+			if er != nil {
+				// handle error
+				log.Debugf("[Bleeding] Connect[#2] to golang.org failed")
+			} else {
+				log.Debugf("[Bleeding] Connect[#2] succeeded!")
+				log.Debugf("[Bleeding] Response: %v", rsp)
+			}*/
 
 	case boot.NetworkHost:
 		// Nothing to do here.

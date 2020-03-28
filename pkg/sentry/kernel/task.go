@@ -552,6 +552,9 @@ type Task struct {
 	//
 	// startTime is protected by mu.
 	startTime ktime.Time
+
+	//Container name, taken from the CONTAINER_NAME environment variable
+	containerName string
 }
 
 func (t *Task) savePtraceTracer() *Task {
@@ -810,4 +813,9 @@ func (t *Task) AbstractSockets() *AbstractSocketNamespace {
 // ContainerID returns t's container ID.
 func (t *Task) ContainerID() string {
 	return t.containerID
+}
+
+// ContainerName return t's container Name if it exists
+func (t *Task) ContainerName() string {
+	return t.containerName
 }

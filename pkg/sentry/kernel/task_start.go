@@ -89,6 +89,9 @@ type TaskConfig struct {
 
 	// ContainerID is the container the new task belongs to.
 	ContainerID string
+
+	// ContainerName is the value of the environment variable
+	ContainerName string
 }
 
 // NewTask creates a new task defined by cfg.
@@ -138,6 +141,7 @@ func (ts *TaskSet) newTask(cfg *TaskConfig) (*Task, error) {
 		rseqSignature:   cfg.RSeqSignature,
 		futexWaiter:     futex.NewWaiter(),
 		containerID:     cfg.ContainerID,
+		containerName:   cfg.ContainerName,
 	}
 	t.creds.Store(cfg.Credentials)
 	t.endStopCond.L = &t.tg.signalHandlers.mu

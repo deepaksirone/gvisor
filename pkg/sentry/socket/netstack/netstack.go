@@ -523,12 +523,12 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 	// Read till EOF maybe?
 	src.Reader(ctx.(*kernel.Task)).Read(printBuf)
 
-	peerAddr, _, _ := s.GetPeerName(ctx.(*kernel.Task))
-	localAddr, _, _ := s.GetSockName(ctx.(*kernel.Task))
+	peerAddr, _ := s.Endpoint.GetRemoteAddress()
+	localAddr, _ := s.Endpoint.GetLocalAddress()
 	// TODO: Implement protocol logging
-
-	log.Infof("[ProxyLogger] Socket Write; Peer Addr: %v, Local Addr: %v", peerAddr, localAddr)
-	log.Infof("[ProxyLogger] Data: %v", printBuf)
+	t := ctx.(*kernel.Task)
+	log.Infof("[ProxyLogger] ContainerName: %v, Socket Write; Remote Addr: %v, Remote Port: %v, Local Addr: %v, Local Port: %v, Data_Str: %v, Data: %v", t.ContainerName(), peerAddr.Addr, peerAddr.Port, localAddr.Addr, localAddr.Port, string(printBuf), printBuf)
+	//log.Infof("[ProxyLogger] Data: %v", printBuf)
 
 	n, resCh, err := s.Endpoint.Write(f, tcpip.WriteOptions{})
 	if err == tcpip.ErrWouldBlock {
@@ -2501,12 +2501,14 @@ func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []
 	// Read till EOF maybe?
 	src.Reader(t).Read(printBuf)
 
-	peerAddr, _, _ := s.GetPeerName(t)
-	localAddr, _, _ := s.GetSockName(t)
+	peerAddr, _ := s.Endpoint.GetRemoteAddress()
+	localAddr, _ := s.Endpoint.GetLocalAddress()
 	// TODO: Implement protocol logging
 
-	log.Infof("[ProxyLogger] Socket SendMsg; Peer Addr: %v, Local Addr: %v", peerAddr, localAddr)
-	log.Infof("[ProxyLogger] Data: %v", printBuf)
+	//log.Infof("[ProxyLogger] ContainerName: %v, Socket SendMsg; Peer Addr: %v, Local Addr: %v", t.ContainerName(), peerAddr, localAddr)
+	//log.Infof("[ProxyLogger] ContainerName: %v, Socket Write; Peer Addr: %v, Local Addr: %v, Data_Str: %v, Data: %v", t.ContainerName(), peerAddr, localAddr, string(printBuf), printBuf)
+	log.Infof("[ProxyLogger] ContainerName: %v, Socket SendMsg; Remote Addr: %v, Remote Port: %v, Local Addr: %v, Local Port: %v, Data_Str: %v, Data: %v", t.ContainerName(), peerAddr.Addr, peerAddr.Port, localAddr.Addr, localAddr.Port, string(printBuf), printBuf)
+	//log.Infof("[ProxyLogger] Data: %v", printBuf)
 
 	// Reject Unix control messages.
 	if !controlMessages.Unix.Empty() {

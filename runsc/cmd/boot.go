@@ -178,6 +178,7 @@ func (b *Boot) Execute(_ context.Context, f *flag.FlagSet, args ...interface{}) 
 	}
 	specutils.LogSpec(spec)
 
+	log.Debugf("[ProxyLogger] EnvVars: %v", spec.Process.Env)
 	if b.applyCaps {
 		caps := spec.Process.Capabilities
 		if caps == nil {

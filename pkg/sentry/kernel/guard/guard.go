@@ -166,12 +166,12 @@ func New(ctrIP string, ctrPort int64) Guard {
 	g.runningTime = 0
 	g.ctrIP = ctrIP
 	g.ctrPort = ctrPort
-	g.eventMap = make(map[int64]int)
-	g.ioWhitelist = make(map[string]int)
-	g.ipWhitelist = make(map[string]int)
-	g.urlWhitelist = make(map[string]int)
-	g.stateTable = make(map[string]int)
-	g.policyTable = make(map[string]*ListNode)
+	//g.eventMap = make(map[int64]int)
+	//g.ioWhitelist = make(map[string]int)
+	//g.ipWhitelist = make(map[string]int)
+	//g.urlWhitelist = make(map[string]int)
+	//g.stateTable = make(map[string]int)
+	//g.policyTable = make(map[string]*ListNode)
 
 	return g
 }
