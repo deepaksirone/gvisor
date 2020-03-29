@@ -302,6 +302,12 @@ go_repository(
     commit = "7f1d6442e00dd48b0f2f95ef48409d39112e2f1e",
 )
 
+go_repository(
+    name = "com_github_gopacket",
+    importpath = "github.com/google/gopacket",
+    commit = "acf5713f69a6d7d46793de01046a2e72f6c2d84f",
+)
+
 #go_repository(
 #    name = "com_github_golang_grpc",
 #    importpath = "github.com/grpc/grpc-go",

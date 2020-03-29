@@ -32,6 +32,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 	"gvisor.dev/gvisor/pkg/abi/linux"
 	"gvisor.dev/gvisor/pkg/binary"
 	"gvisor.dev/gvisor/pkg/context"
@@ -440,11 +442,32 @@ func (s *SocketOperations) Read(ctx context.Context, _ *fs.File, dst usermem.IOS
 		return 0, nil
 	}
 	n, _, _, _, _, err := s.nonBlockingRead(ctx, dst, false, false, false)
+
 	if err == syserr.ErrWouldBlock {
 		return int64(n), syserror.ErrWouldBlock
 	}
 	if err != nil {
 		return 0, err.ToError()
+	}
+	peerAddr, _ := s.Endpoint.GetRemoteAddress()
+	if peerAddr.Port == 53 {
+		printBuf := make([]byte, dst.NumBytes())
+		t := ctx.(*kernel.Task)
+		dst.Reader(t).Read(printBuf[:n])
+		log.Infof("[ProxyLogger] Read ContainerName: %v, DNSResponse: %v, String: %v, inetAddr: %v", t.ContainerName(), printBuf[:n], string(printBuf[:n]), peerAddr)
+		packet := gopacket.NewPacket(printBuf[:n], layers.LayerTypeDNS, gopacket.Default)
+		if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
+			dns, _ := dnsLayer.(*layers.DNS)
+			for _, qn := range dns.Questions {
+				log.Infof("[ProxyLogger] Read ContainerName: %v ,DNSQuestion: %v", t.ContainerName(), qn)
+			}
+
+			for _, ans := range dns.Answers {
+				log.Infof("[ProxyLogger] Read ContainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
+				t.Kernel().UpdateDNSMap(ans.IP, ans.Name)
+			}
+			t.Kernel().PrintDNSMap()
+		}
 	}
 	return int64(n), nil
 }
@@ -2449,9 +2472,38 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 		return 0, 0, nil, 0, socket.ControlMessages{}, err
 	}
 
+	printBuf := make([]byte, dst.NumBytes())
+	printStart := 0
 	if err == nil && (dontWait || !waitAll || s.isPacketBased() || int64(n) >= dst.NumBytes()) {
 		// We got all the data we need.
+		inetAddr, cerr := senderAddr.(*linux.SockAddrInet)
+		//dst.Reader(t).Read(printBuf[:n])
+		log.Infof("[ProxyLogger] RecvMsg ContainerName: %v, Data: %v, String: %v, inetAddr: %v", t.ContainerName(), printBuf[:n], string(printBuf[:n]), inetAddr)
+		if cerr && ntohs(inetAddr.Port) == 53 {
+			dst.Reader(t).Read(printBuf[:n])
+			packet := gopacket.NewPacket(printBuf[:n], layers.LayerTypeDNS, gopacket.Default)
+			if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
+				dns, _ := dnsLayer.(*layers.DNS)
+				for _, qn := range dns.Questions {
+					log.Infof("[ProxyLogger] ContainerName: %v ,DNSQuestion: %v", t.ContainerName(), qn)
+				}
+
+				for _, ans := range dns.Answers {
+					log.Infof("[ProxyLogger] ConatainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
+					t.Kernel().UpdateDNSMap(ans.IP, ans.Name)
+				}
+				t.Kernel().PrintDNSMap()
+			}
+
+		}
+
 		return
+	}
+
+	inetAddr, cerr := senderAddr.(*linux.SockAddrInet)
+	if cerr && ntohs(inetAddr.Port) == 53 {
+		dst.Reader(t).Read(printBuf[:n])
+		printStart += n
 	}
 
 	// Don't overwrite any data we received.
@@ -2467,6 +2519,13 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 		var rn int
 		rn, msgFlags, senderAddr, senderAddrLen, controlMessages, err = s.nonBlockingRead(t, dst, peek, trunc, senderRequested)
 		n += rn
+
+		netAddr, cerr := senderAddr.(*linux.SockAddrInet)
+		if cerr && ntohs(netAddr.Port) == 53 {
+			dst.Reader(t).Read(printBuf[printStart : printStart+rn])
+			printStart += rn
+		}
+
 		if err != nil && err != syserr.ErrWouldBlock {
 			// Always stop on errors other than would block as we generally
 			// won't be able to get any more data. Eat the error if we got
@@ -2474,16 +2533,69 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 			if n > 0 {
 				err = nil
 			}
+
+			inetAddr, cerr := senderAddr.(*linux.SockAddrInet)
+			log.Infof("[ProxyLogger] RecvMsg ContainerName: %v, Data: %v, String: %v, inetAddr: %v", t.ContainerName(), printBuf[:printStart], string(printBuf[:printStart]), inetAddr)
+			if cerr && ntohs(inetAddr.Port) == 53 {
+				packet := gopacket.NewPacket(printBuf[:printStart], layers.LayerTypeDNS, gopacket.Default)
+				if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
+					dns, _ := dnsLayer.(*layers.DNS)
+					for _, qn := range dns.Questions {
+						log.Infof("[ProxyLogger] RecvMsg ContainerName: %v ,DNSQuestion: %v", t.ContainerName(), qn)
+					}
+
+					for _, ans := range dns.Answers {
+						log.Infof("[ProxyLogger] RecvMsg ConatainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
+						t.Kernel().UpdateDNSMap(ans.IP, ans.Name)
+					}
+					t.Kernel().PrintDNSMap()
+				}
+			}
+
 			return
 		}
 		if err == nil && (s.isPacketBased() || !waitAll || int64(rn) >= dst.NumBytes()) {
 			// We got all the data we need.
+			inetAddr, cerr := senderAddr.(*linux.SockAddrInet)
+			log.Infof("[ProxyLogger] RecvMsg ContainerName: %v, DNSResponse: %v, String: %v, inetAddr: %v", t.ContainerName(), printBuf[:printStart], string(printBuf[:printStart]), inetAddr)
+			if cerr && ntohs(inetAddr.Port) == 53 {
+				packet := gopacket.NewPacket(printBuf[:printStart], layers.LayerTypeDNS, gopacket.Default)
+				if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
+					dns, _ := dnsLayer.(*layers.DNS)
+					for _, qn := range dns.Questions {
+						log.Infof("[ProxyLogger] RecvMsg ContainerName: %v ,DNSQuestion: %v", t.ContainerName(), qn)
+					}
+
+					for _, ans := range dns.Answers {
+						log.Infof("[ProxyLogger] RecvMsg ContainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
+						t.Kernel().UpdateDNSMap(ans.IP, ans.Name)
+					}
+					t.Kernel().PrintDNSMap()
+				}
+			}
+
 			return
 		}
 		dst = dst.DropFirst(rn)
 
 		if err := t.BlockWithDeadline(ch, haveDeadline, deadline); err != nil {
 			if n > 0 {
+				inetAddr, cerr := senderAddr.(*linux.SockAddrInet)
+				log.Infof("[ProxyLogger] RecvMsg ContainerName: %v, DNSResponse: %v, String: %v, inetAddr: %v", t.ContainerName(), printBuf[:printStart], string(printBuf[:printStart]), inetAddr)
+				if cerr && ntohs(inetAddr.Port) == 53 {
+					packet := gopacket.NewPacket(printBuf[:printStart], layers.LayerTypeDNS, gopacket.Default)
+					if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
+						dns, _ := dnsLayer.(*layers.DNS)
+						for _, qn := range dns.Questions {
+							log.Infof("[ProxyLogger] RecvMsg ContainerName: %v ,DNSQuestion: %v", t.ContainerName(), qn)
+						}
+
+						for _, ans := range dns.Answers {
+							log.Infof("[ProxyLogger] RecvMsg ConatainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
+						}
+					}
+				}
+
 				return n, msgFlags, senderAddr, senderAddrLen, controlMessages, nil
 			}
 			if err == syserror.ETIMEDOUT {

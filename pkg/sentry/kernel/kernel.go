@@ -253,6 +253,15 @@ type Kernel struct {
 	Sandbox2seclambdaFD int
 
 	Seclambda2sandboxFD int
+
+	dnsMapMu sync.Mutex `state:"nosave"`
+
+	dnsMap map[[16]byte]dnsRec
+}
+
+type dnsRec struct {
+	hostname []byte
+	isIPV4   bool
 }
 
 // InitKernelArgs holds arguments to Init.
@@ -337,6 +346,7 @@ func (k *Kernel) Init(args InitKernelArgs) error {
 	k.applicationCores = args.ApplicationCores
 	k.Seclambda2sandboxFD = args.Seclambda2sandboxFD
 	k.Sandbox2seclambdaFD = args.Sandbox2seclambdaFD
+	k.dnsMap = make(map[[16]byte]dnsRec)
 
 	if args.UseHostCores {
 		k.useHostCores = true
@@ -383,6 +393,28 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte)
 	log.Infof("[Kernel] received Guard response!")
 
 	return recv
+}
+
+func (k *Kernel) UpdateDNSMap(ip []byte, hostname []byte) {
+	k.dnsMapMu.Lock()
+	defer k.dnsMapMu.Unlock()
+
+	// Warning: replaces any previous mapping
+	var newIP [16]byte
+	copy(newIP[:], ip)
+	var d dnsRec
+	d.hostname = hostname
+	d.isIPV4 = len(ip) == 4
+	k.dnsMap[newIP] = d
+}
+
+func (k *Kernel) PrintDNSMap() {
+	k.dnsMapMu.Lock()
+	defer k.dnsMapMu.Unlock()
+	for ip, hostname := range k.dnsMap {
+		hString := string(hostname.hostname)
+		log.Infof("[ProxyLogger] DNSMap: %v -> %v", ip, hString)
+	}
 }
 
 // SaveTo saves the state of k to w.

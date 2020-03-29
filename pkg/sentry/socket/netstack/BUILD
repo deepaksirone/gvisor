@@ -46,5 +46,7 @@ go_library(
         "//pkg/tcpip/transport/udp",
         "//pkg/usermem",
         "//pkg/waiter",
+	"@com_github_gopacket//:go_default_library",
+	"@com_github_gopacket//layers:go_default_library",
     ],
 )
