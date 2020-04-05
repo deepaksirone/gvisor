@@ -454,7 +454,7 @@ func (s *SocketOperations) Read(ctx context.Context, _ *fs.File, dst usermem.IOS
 		printBuf := make([]byte, dst.NumBytes())
 		t := ctx.(*kernel.Task)
 		dst.Reader(t).Read(printBuf[:n])
-		log.Infof("[ProxyLogger] Read ContainerName: %v, DNSResponse: %v, String: %v, inetAddr: %v", t.ContainerName(), printBuf[:n], string(printBuf[:n]), peerAddr)
+		//log.Infof("[ProxyLogger] Read ContainerName: %v, DNSResponse: %v, String: %v, inetAddr: %v", t.ContainerName(), printBuf[:n], string(printBuf[:n]), peerAddr)
 		packet := gopacket.NewPacket(printBuf[:n], layers.LayerTypeDNS, gopacket.Default)
 		if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
 			dns, _ := dnsLayer.(*layers.DNS)
@@ -550,7 +550,12 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 	localAddr, _ := s.Endpoint.GetLocalAddress()
 	// TODO: Implement protocol logging
 	t := ctx.(*kernel.Task)
-	log.Infof("[ProxyLogger] ContainerName: %v, Socket Write; Remote Addr: %v, Remote Port: %v, Local Addr: %v, Local Port: %v, Data_Str: %v, Data: %v", t.ContainerName(), peerAddr.Addr, peerAddr.Port, localAddr.Addr, localAddr.Port, string(printBuf), printBuf)
+
+	var ip [16]byte
+	copy(ip[:], peerAddr.Addr)
+	remoteHost, ok := t.Kernel().LookupDNSMap(ip)
+
+	log.Infof("[MessageLoggerWrite] ContainerName: %v, Remote Host: %v, Remote Port: %v, Local Addr: %v, Local Port: %v, Data: %v, HasRhost: %v", t.ContainerName(), remoteHost, peerAddr.Port, localAddr.Addr, localAddr.Port, printBuf, ok)
 	//log.Infof("[ProxyLogger] Data: %v", printBuf)
 
 	n, resCh, err := s.Endpoint.Write(f, tcpip.WriteOptions{})
@@ -2478,7 +2483,7 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 		// We got all the data we need.
 		inetAddr, cerr := senderAddr.(*linux.SockAddrInet)
 		//dst.Reader(t).Read(printBuf[:n])
-		log.Infof("[ProxyLogger] RecvMsg ContainerName: %v, Data: %v, String: %v, inetAddr: %v", t.ContainerName(), printBuf[:n], string(printBuf[:n]), inetAddr)
+		//log.Infof("[ProxyLogger] RecvMsg ContainerName: %v, Data: %v, String: %v, inetAddr: %v", t.ContainerName(), printBuf[:n], string(printBuf[:n]), inetAddr)
 		if cerr && ntohs(inetAddr.Port) == 53 {
 			dst.Reader(t).Read(printBuf[:n])
 			packet := gopacket.NewPacket(printBuf[:n], layers.LayerTypeDNS, gopacket.Default)
@@ -2535,7 +2540,7 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 			}
 
 			inetAddr, cerr := senderAddr.(*linux.SockAddrInet)
-			log.Infof("[ProxyLogger] RecvMsg ContainerName: %v, Data: %v, String: %v, inetAddr: %v", t.ContainerName(), printBuf[:printStart], string(printBuf[:printStart]), inetAddr)
+			//log.Infof("[ProxyLogger] RecvMsg ContainerName: %v, Data: %v, String: %v, inetAddr: %v", t.ContainerName(), printBuf[:printStart], string(printBuf[:printStart]), inetAddr)
 			if cerr && ntohs(inetAddr.Port) == 53 {
 				packet := gopacket.NewPacket(printBuf[:printStart], layers.LayerTypeDNS, gopacket.Default)
 				if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
@@ -2557,7 +2562,7 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 		if err == nil && (s.isPacketBased() || !waitAll || int64(rn) >= dst.NumBytes()) {
 			// We got all the data we need.
 			inetAddr, cerr := senderAddr.(*linux.SockAddrInet)
-			log.Infof("[ProxyLogger] RecvMsg ContainerName: %v, DNSResponse: %v, String: %v, inetAddr: %v", t.ContainerName(), printBuf[:printStart], string(printBuf[:printStart]), inetAddr)
+			//log.Infof("[ProxyLogger] RecvMsg ContainerName: %v, DNSResponse: %v, String: %v, inetAddr: %v", t.ContainerName(), printBuf[:printStart], string(printBuf[:printStart]), inetAddr)
 			if cerr && ntohs(inetAddr.Port) == 53 {
 				packet := gopacket.NewPacket(printBuf[:printStart], layers.LayerTypeDNS, gopacket.Default)
 				if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
@@ -2581,7 +2586,7 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 		if err := t.BlockWithDeadline(ch, haveDeadline, deadline); err != nil {
 			if n > 0 {
 				inetAddr, cerr := senderAddr.(*linux.SockAddrInet)
-				log.Infof("[ProxyLogger] RecvMsg ContainerName: %v, DNSResponse: %v, String: %v, inetAddr: %v", t.ContainerName(), printBuf[:printStart], string(printBuf[:printStart]), inetAddr)
+				//log.Infof("[ProxyLogger] RecvMsg ContainerName: %v, DNSResponse: %v, String: %v, inetAddr: %v", t.ContainerName(), printBuf[:printStart], string(printBuf[:printStart]), inetAddr)
 				if cerr && ntohs(inetAddr.Port) == 53 {
 					packet := gopacket.NewPacket(printBuf[:printStart], layers.LayerTypeDNS, gopacket.Default)
 					if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
@@ -2619,7 +2624,12 @@ func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []
 
 	//log.Infof("[ProxyLogger] ContainerName: %v, Socket SendMsg; Peer Addr: %v, Local Addr: %v", t.ContainerName(), peerAddr, localAddr)
 	//log.Infof("[ProxyLogger] ContainerName: %v, Socket Write; Peer Addr: %v, Local Addr: %v, Data_Str: %v, Data: %v", t.ContainerName(), peerAddr, localAddr, string(printBuf), printBuf)
-	log.Infof("[ProxyLogger] ContainerName: %v, Socket SendMsg; Remote Addr: %v, Remote Port: %v, Local Addr: %v, Local Port: %v, Data_Str: %v, Data: %v", t.ContainerName(), peerAddr.Addr, peerAddr.Port, localAddr.Addr, localAddr.Port, string(printBuf), printBuf)
+
+	var ip [16]byte
+	copy(ip[:], peerAddr.Addr)
+	remoteHost, ok := t.Kernel().LookupDNSMap(ip)
+
+	log.Infof("[MessageLoggerSendMsg] ContainerName: %v, Remote Host: %v, Remote Port: %v, Local Addr: %v, Local Port: %v, Data: %v, HasRhost: %v", t.ContainerName(), remoteHost, peerAddr.Port, localAddr.Addr, localAddr.Port, printBuf, ok)
 	//log.Infof("[ProxyLogger] Data: %v", printBuf)
 
 	// Reject Unix control messages.

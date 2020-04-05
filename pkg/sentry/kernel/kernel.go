@@ -417,6 +417,15 @@ func (k *Kernel) PrintDNSMap() {
 	}
 }
 
+func (k *Kernel) LookupDNSMap(ip [16]byte) (string, bool) {
+	k.dnsMapMu.Lock()
+	defer k.dnsMapMu.Unlock()
+	if dnsRec, ok := k.dnsMap[ip]; ok {
+		return string(dnsRec.hostname), true
+	}
+	return "", false
+}
+
 // SaveTo saves the state of k to w.
 //
 // Preconditions: The kernel must be paused throughout the call to SaveTo.
