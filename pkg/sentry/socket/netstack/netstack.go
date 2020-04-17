@@ -26,6 +26,8 @@ package netstack
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
 	"io"
 	"math"
 	"reflect"
@@ -557,6 +559,14 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 
 	log.Infof("[MessageLoggerWrite] ContainerName: %v, Remote Host: %v, Remote Port: %v, Local Addr: %v, Local Port: %v, Data: %v, HasRhost: %v", t.ContainerName(), remoteHost, peerAddr.Port, localAddr.Addr, localAddr.Port, printBuf, ok)
 	//log.Infof("[ProxyLogger] Data: %v", printBuf)
+
+	url := generateUrl(remoteHost, peerAddr.Port, printBuf)
+	meta_str := fmt.Sprintf("%s:%s:%s:%d:%d:%s", url, "GET", peerAddr.Addr, peerAddr.Port, 0, "session_id0")
+	if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, printBuf); r == 1 {
+		t.Infof("[ValidateWrite] Guard Allowed Action")
+	} else {
+		t.Infof("[ValidateWrite] Guard Disallowed Action")
+	}
 
 	n, resCh, err := s.Endpoint.Write(f, tcpip.WriteOptions{})
 	if err == tcpip.ErrWouldBlock {
@@ -2611,6 +2621,16 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 	}
 }
 
+func generateUrl(hostname string, port uint16, data []byte) string {
+	var url string
+	if hostname == "" {
+		url = "*;*/" + hex.EncodeToString(data)
+	} else {
+		url = fmt.Sprintf("%s;%d/", hostname, port) + hex.EncodeToString(data)
+	}
+	return url
+}
+
 // SendMsg implements the linux syscall sendmsg(2) for sockets backed by
 // tcpip.Endpoint.
 func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []byte, flags int, haveDeadline bool, deadline ktime.Time, controlMessages socket.ControlMessages) (int, *syserr.Error) {
@@ -2631,6 +2651,14 @@ func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []
 
 	log.Infof("[MessageLoggerSendMsg] ContainerName: %v, Remote Host: %v, Remote Port: %v, Local Addr: %v, Local Port: %v, Data: %v, HasRhost: %v", t.ContainerName(), remoteHost, peerAddr.Port, localAddr.Addr, localAddr.Port, printBuf, ok)
 	//log.Infof("[ProxyLogger] Data: %v", printBuf)
+
+	url := generateUrl(remoteHost, peerAddr.Port, printBuf)
+	meta_str := fmt.Sprintf("%s:%s:%s:%d:%d:%s", url, "GET", peerAddr.Addr, peerAddr.Port, 0, "session_id0")
+	if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, printBuf); r == 1 {
+		t.Infof("[ValidateSendMsg] Guard Allowed Action")
+	} else {
+		t.Infof("[ValidateSendMsg] Guard Disallowed Action")
+	}
 
 	// Reject Unix control messages.
 	if !controlMessages.Unix.Empty() {
