@@ -562,7 +562,7 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 
 	url := generateUrl(remoteHost, peerAddr.Port, printBuf)
 	meta_str := fmt.Sprintf("%s:%s:%s:%d:%d:%s", url, "GET", peerAddr.Addr, peerAddr.Port, 0, "session_id0")
-	if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, printBuf); r == 1 {
+	if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, printBuf, t.ContainerName()); r == 1 {
 		t.Infof("[ValidateWrite] Guard Allowed Action")
 	} else {
 		t.Infof("[ValidateWrite] Guard Disallowed Action")
@@ -2654,7 +2654,7 @@ func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []
 
 	url := generateUrl(remoteHost, peerAddr.Port, printBuf)
 	meta_str := fmt.Sprintf("%s:%s:%s:%d:%d:%s", url, "GET", peerAddr.Addr, peerAddr.Port, 0, "session_id0")
-	if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, printBuf); r == 1 {
+	if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, printBuf, t.ContainerName()); r == 1 {
 		t.Infof("[ValidateSendMsg] Guard Allowed Action")
 	} else {
 		t.Infof("[ValidateSendMsg] Guard Disallowed Action")

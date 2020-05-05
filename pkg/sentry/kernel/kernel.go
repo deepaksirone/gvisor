@@ -377,7 +377,7 @@ func (k *Kernel) SendDummyGuard() {
 	k.guardChan <- guard.KernMsg{}
 }
 
-func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte) int {
+func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte, containerName string) int {
 	var msg guard.KernMsg
 	recvChan := make(chan int)
 
@@ -386,13 +386,27 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte)
 	msg.Data = make([]byte, len(data))
 	copy(msg.Data[:], data)
 	msg.RecvChan = recvChan
-
+	msg.FuncName = containerName
 	k.guardChan <- msg
 	log.Infof("[Kernel] waiting for Guard response!")
-	recv := <-recvChan
-	log.Infof("[Kernel] received Guard response!")
 
-	return recv
+	select {
+	case recv := <-recvChan:
+		log.Infof("[Kernel] received Guard response!")
+		return recv
+	case <-time.After(5 * time.Second):
+		return 0
+	}
+	//recv := <-recvChan
+	//log.Infof("[Kernel] received Guard response!")
+
+	//return recv
+}
+
+func (k *Kernel) SendHostnameGuard(containerName string) {
+	var msg guard.KernMsg
+	msg.FuncName = containerName
+	k.guardChan <- msg
 }
 
 func (k *Kernel) UpdateDNSMap(ip []byte, hostname []byte) {
@@ -1167,7 +1181,7 @@ func (k *Kernel) decRunningTasks() {
 // WaitExited blocks until all tasks in k have exited.
 func (k *Kernel) WaitExited() {
 	k.tasks.liveGoroutines.Wait()
-	//k.guardCtrChan <- 1 // Kill the guard after all tasks have exited
+	k.guardCtrChan <- 1 // Kill the guard after all tasks have exited
 }
 
 // Kill requests that all tasks in k immediately exit as if group exiting with

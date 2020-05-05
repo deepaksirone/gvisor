@@ -97,7 +97,7 @@ func ValidateSSLSend(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kern
 
 	meta_str := fmt.Sprintf("%s:%s:%s:%s:%d:%s", hostname+url, method, ip, port, has_body, session_id)
 	t.Infof("[ValidateSSLSend] The meta str: %s", meta_str)
-	if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, data_slice); r == 1 {
+	if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, data_slice, t.ContainerName()); r == 1 {
 		t.Infof("[ValidateSSLSend] Guard allowed the action")
 	} else {
 		t.Infof("[ValidateSSLSend] Guard disallowed action")

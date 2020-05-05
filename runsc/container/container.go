@@ -327,7 +327,7 @@ func New(conf *boot.Config, args Args) (*Container, error) {
 				return err
 			}
 
-			sandBox2seclambdaSend, seclambda2SandboxRecv, e := c.createSeclambdaProxy("node0.controller.cs799-serverless-pg0.utah.cloudlab.us", 5000, conf)
+			sandBox2seclambdaSend, seclambda2SandboxRecv, e := c.createSeclambdaProxy("node0.controller.cs799-serverless-pg0.utah.cloudlab.us", 5000, conf, args.Spec)
 
 			//if dummyErr := c.createDummyProcess(); dummyErr != nil {
 			//	log.Debugf("[DummyProcess] Error launching : %v", dummyErr)
@@ -377,9 +377,11 @@ func New(conf *boot.Config, args Args) (*Container, error) {
 			return nil, fmt.Errorf("no sandbox ID found when creating container")
 		}
 		log.Debugf("Creating new container %q in sandbox %q", c.ID, sbid)
+		//hostname, _ := specutils.EnvVar(spec.Process.Env, "HOSTNAME")
 
 		// Find the sandbox associated with this ID.
 		sb, err := Load(conf.RootDir, sbid)
+
 		if err != nil {
 			return nil, err
 		}
@@ -907,7 +909,7 @@ func (c *Container) createDummyProcess() error {
 	return nil
 }
 
-func (c *Container) createSeclambdaProxy(controller string, controllerPort int, conf *boot.Config) (*os.File, *os.File, error) {
+func (c *Container) createSeclambdaProxy(controller string, controllerPort int, conf *boot.Config, spec *specs.Spec) (*os.File, *os.File, error) {
 	nextFD := 3
 
 	args := conf.ToFlags()
@@ -917,6 +919,9 @@ func (c *Container) createSeclambdaProxy(controller string, controllerPort int, 
 	if err != nil {
 		return nil, nil, err
 	}
+
+	hostname, _ := specutils.EnvVar(spec.Process.Env, "HOSTNAME")
+	log.Infof("[createSeclambdaProxy] Env: %v", spec.Process.Env)
 
 	args = append(args, "seclambda", "--address="+controller)
 	args = append(args, "--port="+strconv.Itoa(controllerPort))
@@ -941,6 +946,9 @@ func (c *Container) createSeclambdaProxy(controller string, controllerPort int, 
 
 	defer sandBox2seclambdaRecv.Close()
 	defer seclambda2SandboxSend.Close()
+
+	// Add container name argument
+	args = append(args, "--hostname="+hostname)
 
 	binPath := "/usr/local/bin/seclambda"
 	cmd := exec.Command(binPath, args...)

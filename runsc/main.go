@@ -44,7 +44,7 @@ var (
 	rootDir     = flag.String("root", "", "root directory for storage of container state.")
 	logFilename = flag.String("log", "", "file path where internal debug information is written, default is stdout.")
 	logFormat   = flag.String("log-format", "text", "log format: text (default), json, or json-k8s.")
-	debug       = flag.Bool("debug", true, "enable debug logging.")
+	debug       = flag.Bool("debug", false, "enable debug logging.")
 	showVersion = flag.Bool("version", false, "show version and exit.")
 	// TODO(gvisor.dev/issue/193): support systemd cgroups
 	systemdCgroup = flag.Bool("systemd-cgroup", false, "Use systemd for cgroups. NOT SUPPORTED.")
@@ -61,7 +61,7 @@ var (
 	alsoLogToStderr = flag.Bool("alsologtostderr", false, "send log messages to stderr.")
 
 	// Debugging flags: strace related
-	strace         = flag.Bool("strace", true, "enable strace.")
+	strace         = flag.Bool("strace", false, "enable strace.")
 	straceSyscalls = flag.String("strace-syscalls", "", "comma-separated list of syscalls to trace. If --strace is true and this list is empty, then all syscalls will be traced.")
 	straceLogSize  = flag.Uint("strace-log-size", 1024, "default size (in bytes) to log data argument blobs.")
 

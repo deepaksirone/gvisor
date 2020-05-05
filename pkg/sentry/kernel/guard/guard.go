@@ -79,6 +79,7 @@ type KernMsg struct {
 	MetaData  []byte
 	Data      []byte
 	RecvChan  chan int
+	FuncName  string
 }
 
 type transMsg struct {
@@ -87,6 +88,7 @@ type transMsg struct {
 	Data      []byte
 	MsgID     int64
 	IsExit    bool
+	FuncName  string
 }
 
 type ReturnMsg struct {
@@ -112,7 +114,7 @@ func get_region_name() string {
 func get_inst_id() []byte {
 	return []byte("instid0")
 }
-
+/
 func split_str(s, sep string) []string {
 	return strings.Split(s, sep)
 }
@@ -329,6 +331,7 @@ func makeTransMsg(msg KernMsg) transMsg {
 	m.IsExit = false
 	m.MsgID = msgID
 	msgID += 1
+	m.FuncName = msg.FuncName
 	return m
 }
 
@@ -615,6 +618,11 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSid
 		case <-ctr:
 			log.Infof("[Guard] Exiting the go routine")
 			encoder.Encode(&transMsg{IsExit: true})
+
+			/*
+							for k, v := range eventChanMap {
+				 				   v <- 0
+							}*/
 			//restore()
 			break
 
@@ -662,4 +670,5 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSid
 		}
 
 	}
+	log.Infof("[Guard] Exiting the go routine for loop")
 }

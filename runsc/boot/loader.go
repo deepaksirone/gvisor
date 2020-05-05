@@ -598,6 +598,9 @@ func (l *Loader) createContainer(cid string) error {
 // the newly created process. Caller owns 'files' and may close them after
 // this method returns.
 func (l *Loader) startContainer(spec *specs.Spec, conf *Config, cid string, files []*os.File) error {
+
+	hostname, _ := specutils.EnvVar(spec.Process.Env, "HOSTNAME")
+	l.k.SendHostnameGuard(hostname)
 	// Create capabilities.
 	caps, err := specutils.Capabilities(conf.EnableRaw, spec.Process.Capabilities)
 	if err != nil {
