@@ -257,6 +257,8 @@ type Kernel struct {
 	dnsMapMu sync.Mutex `state:"nosave"`
 
 	dnsMap map[[16]byte]dnsRec
+
+	guardEventMu sync.Mutex `state:"nosave"`
 }
 
 type dnsRec struct {
@@ -378,6 +380,9 @@ func (k *Kernel) SendDummyGuard() {
 }
 
 func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte, containerName string) int {
+	//k.guardEventMu.Lock()
+	//defer k.guardEventMu.Unlock()
+
 	var msg guard.KernMsg
 	recvChan := make(chan int)
 
@@ -389,18 +394,18 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 	msg.FuncName = containerName
 	k.guardChan <- msg
 	log.Infof("[Kernel] waiting for Guard response!")
+	/*
+		select {
+		case recv := <-recvChan:
+			log.Infof("[Kernel] received Guard response!")
+			return recv
+		case <-time.After(5 * time.Second):
+			return 0
+		}*/
+	recv := <-recvChan
+	log.Infof("[Kernel] received Guard response!")
 
-	select {
-	case recv := <-recvChan:
-		log.Infof("[Kernel] received Guard response!")
-		return recv
-	case <-time.After(5 * time.Second):
-		return 0
-	}
-	//recv := <-recvChan
-	//log.Infof("[Kernel] received Guard response!")
-
-	//return recv
+	return recv
 }
 
 func (k *Kernel) SendHostnameGuard(containerName string) {

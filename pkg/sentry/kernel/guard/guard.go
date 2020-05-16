@@ -563,6 +563,7 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSid
 
 			trans := makeTransMsg(msg)
 			eventChanMap[trans.MsgID] = msg.RecvChan
+			log.Infof("[Guard] Sending message to proxy with msgID: %v", trans.MsgID)
 			encoder.Encode(&trans)
 
 			/*
