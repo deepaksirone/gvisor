@@ -394,14 +394,15 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 	msg.FuncName = containerName
 	k.guardChan <- msg
 	log.Infof("[Kernel] waiting for Guard response!")
-	/*
-		select {
-		case recv := <-recvChan:
-			log.Infof("[Kernel] received Guard response!")
-			return recv
-		case <-time.After(5 * time.Second):
-			return 0
-		}*/
+
+	/*select {
+	case recv := <-recvChan:
+		log.Infof("[Kernel] %s received Guard response!", containerName)
+		return recv
+	case <-time.After(5 * time.Second):
+		log.Infof("[Kernel] %s Timed out waiting for response", containerName)
+		return 0
+	}*/
 	recv := <-recvChan
 	log.Infof("[Kernel] received Guard response!")
 

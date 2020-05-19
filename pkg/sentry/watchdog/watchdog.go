@@ -334,7 +334,7 @@ func (w *Watchdog) reportStuckWatchdog() {
 func (w *Watchdog) doAction(action Action, skipStack bool, msg *bytes.Buffer) {
 	switch action {
 	case LogWarning:
-		if skipStack {
+		if !skipStack {
 			msg.WriteString("\n...[stack dump skipped]...")
 			log.Warningf(msg.String())
 			return

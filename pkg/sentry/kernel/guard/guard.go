@@ -94,6 +94,7 @@ type transMsg struct {
 type ReturnMsg struct {
 	allowed bool
 	MsgID   int64
+	IsExit  bool
 }
 
 /*
@@ -473,6 +474,9 @@ func receiveSeclambdaMsgs(seclambdaSide int, replyChan chan ReturnMsg) {
 		}
 		replyChan <- q
 	}
+	var end ReturnMsg
+	end.IsExit = true
+	replyChan <- end
 }
 
 func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSide int) {
@@ -481,7 +485,7 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSid
 	encoder := gob.NewEncoder(sandboxFile)
 	replyChan := make(chan ReturnMsg)
 	eventChanMap := make(map[int64]chan int)
-
+	seclambda_exited := false
 	go receiveSeclambdaMsgs(seclambdaSide, replyChan)
 	// Connect to the controller
 	/*
@@ -561,6 +565,12 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSid
 			log.Infof("[Guard] The message struct : %v", msg)
 			g.requestNo += 1
 
+			if seclambda_exited {
+				msg.RecvChan <- 0
+				log.Infof("[Guard] Proxy Exited: Sending all false")
+				continue
+			}
+
 			trans := makeTransMsg(msg)
 			eventChanMap[trans.MsgID] = msg.RecvChan
 			log.Infof("[Guard] Sending message to proxy with msgID: %v", trans.MsgID)
@@ -628,14 +638,32 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSid
 			break
 
 		case recv := <-replyChan:
-			if recv.allowed {
-				eventChanMap[recv.MsgID] <- 1
-			} else {
-				eventChanMap[recv.MsgID] <- 0
+			if recv.IsExit {
+				seclambda_exited = true
+				for _, v := range eventChanMap {
+					v <- 0
+					//delete(eventChanMap, k)
+				}
+				eventChanMap = make(map[int64]chan int)
+				log.Infof("[Guard] Seclambda proxy exited; replying false to all new reqs")
 			}
 
-			delete(eventChanMap, recv.MsgID)
-			log.Infof("[Guard] Getting reply from seclambdaSide: %v", recv)
+			if !seclambda_exited {
+				if recv.allowed {
+					eventChanMap[recv.MsgID] <- 1
+				} else {
+					eventChanMap[recv.MsgID] <- 0
+				}
+				delete(eventChanMap, recv.MsgID)
+				log.Infof("[Guard] Getting reply from seclambdaSide: %v", recv)
+			} else {
+				ch, pr := eventChanMap[recv.MsgID]
+				if pr {
+					ch <- 0
+				}
+			}
+			//delete(eventChanMap, recv.MsgID)
+			//log.Infof("[Guard] Getting reply from seclambdaSide: %v", recv)
 			/*
 				if len(recv[0]) <= 1 {
 					continue

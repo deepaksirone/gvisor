@@ -120,6 +120,10 @@ type Container struct {
 	// This field isn't saved to json, because only a creator of a gofer
 	// process will have it as a child process.
 	goferIsChild bool
+
+	SeclambdaPid int `json:"seclambdaPid"`
+
+	seclambdaIsChild bool
 }
 
 // loadSandbox loads all containers that belong to the sandbox with the given
@@ -875,6 +879,27 @@ func (c *Container) waitForStopped() error {
 			return fmt.Errorf("gofer is still running")
 		}
 		c.GoferPid = 0
+
+		if c.SeclambdaPid == 0 {
+			return nil
+		}
+
+		if c.seclambdaIsChild {
+			// The seclambda process is a child of the current process,
+			// so we can wait it and collect its zombie.
+			wpid, err := syscall.Wait4(int(c.SeclambdaPid), nil, syscall.WNOHANG, nil)
+			if err != nil {
+				return fmt.Errorf("error waiting the seclambda process: %v", err)
+			}
+			if wpid == 0 {
+				return fmt.Errorf("seclambda is still running")
+			}
+
+		} else if err := syscall.Kill(c.SeclambdaPid, 0); err == nil {
+			return fmt.Errorf("seclambda is still running")
+		}
+
+		c.SeclambdaPid = 0
 		return nil
 	}
 	return backoff.Retry(op, b)
@@ -972,8 +997,8 @@ func (c *Container) createSeclambdaProxy(controller string, controllerPort int, 
 		return nil, nil, fmt.Errorf("Seclambda: %v", err)
 	}
 	log.Infof("Seclambda started, PID: %d", cmd.Process.Pid)
-	//c.GoferPid = cmd.Process.Pid
-	//c.goferIsChild = true
+	c.SeclambdaPid = cmd.Process.Pid
+	c.seclambdaIsChild = true
 	return sandBox2seclambdaSend, seclambda2SandboxRecv, nil
 
 }
