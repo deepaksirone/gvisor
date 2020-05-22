@@ -247,8 +247,12 @@ type Kernel struct {
 	//Guard channel
 	guardChan chan guard.KernMsg
 
+	guardRunning bool
+
 	//Controller Channel
 	guardCtrChan chan int
+
+	guardDoneChan chan int
 
 	Sandbox2seclambdaFD int
 
@@ -371,7 +375,7 @@ func (k *Kernel) Init(args InitKernelArgs) error {
 	k.guard = guard.New("127.0.0.1", 5000)
 	k.guardChan = make(chan guard.KernMsg)
 	k.guardCtrChan = make(chan int)
-
+	k.guardDoneChan = make(chan int)
 	return nil
 }
 
@@ -410,9 +414,15 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 }
 
 func (k *Kernel) SendHostnameGuard(containerName string) {
-	var msg guard.KernMsg
-	msg.FuncName = containerName
-	k.guardChan <- msg
+	if k.guardRunning {
+		var msg guard.KernMsg
+		recvChan := make(chan int)
+		msg.RecvChan = recvChan
+		msg.FuncName = containerName
+		msg.IsFunc = true
+		k.guardChan <- msg
+		<-recvChan
+	}
 }
 
 func (k *Kernel) UpdateDNSMap(ip []byte, hostname []byte) {
@@ -1013,7 +1023,8 @@ func (k *Kernel) Start() error {
 	k.resumeTimeLocked()
 	// Start task goroutines.
 	k.tasks.mu.RLock()
-	go k.guard.Run(k.guardChan, k.guardCtrChan, k.Sandbox2seclambdaFD, k.Seclambda2sandboxFD)
+	go k.guard.Run(k.guardChan, k.guardCtrChan, k.guardDoneChan, k.Sandbox2seclambdaFD, k.Seclambda2sandboxFD)
+	k.guardRunning = true
 	//k.guard.SendKeyInitReq()
 	//<-k.guardCtrChan
 	defer k.tasks.mu.RUnlock()
@@ -1188,6 +1199,7 @@ func (k *Kernel) decRunningTasks() {
 func (k *Kernel) WaitExited() {
 	k.tasks.liveGoroutines.Wait()
 	k.guardCtrChan <- 1 // Kill the guard after all tasks have exited
+	<-k.guardDoneChan
 }
 
 // Kill requests that all tasks in k immediately exit as if group exiting with

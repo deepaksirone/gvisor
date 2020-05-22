@@ -326,7 +326,7 @@ func New(conf *boot.Config, args Args) (*Container, error) {
 		}
 		if err := runInCgroup(cg, func() error {
 			ioFiles, specFile, err := c.createGoferProcess(args.Spec, conf, args.BundleDir)
-			log.Debugf("[Seclambda] Creating Seclambda Proxy")
+			//log.Debugf("[Seclambda] Creating Seclambda Proxy")
 			if err != nil {
 				return err
 			}
@@ -336,7 +336,6 @@ func New(conf *boot.Config, args Args) (*Container, error) {
 			//if dummyErr := c.createDummyProcess(); dummyErr != nil {
 			//	log.Debugf("[DummyProcess] Error launching : %v", dummyErr)
 			//}
-
 			if e != nil {
 				log.Debugf("[Seclambda] failed to launch")
 				return e
@@ -479,6 +478,10 @@ func (c *Container) Start(conf *boot.Config) error {
 
 	// Adjust the oom_score_adj for sandbox. This must be done after saveLocked().
 	if err := adjustSandboxOOMScoreAdj(c.Sandbox, c.Saver.RootDir, false); err != nil {
+		return err
+	}
+
+	if err := c.adjustSeclambdaOOMScoreAdj(); err != nil {
 		return err
 	}
 
@@ -835,6 +838,14 @@ func (c *Container) stop() error {
 		if err := syscall.Kill(c.GoferPid, syscall.SIGKILL); err != nil {
 			// The gofer may already be stopped, log the error.
 			log.Warningf("Error sending signal %d to gofer %d: %v", syscall.SIGKILL, c.GoferPid, err)
+		}
+	}
+
+	if c.SeclambdaPid != 0 {
+		log.Debugf("Killing seclambda for container %q, PID: %d", c.ID, c.SeclambdaPid)
+		if err := syscall.Kill(c.SeclambdaPid, syscall.SIGKILL); err != nil {
+			// seclambda may already be stopped, log the error.
+			log.Warningf("Error sending signal %d to Seclambda %d: %v", syscall.SIGKILL, c.SeclambdaPid, err)
 		}
 	}
 
@@ -1213,6 +1224,22 @@ func (c *Container) adjustGoferOOMScoreAdj() error {
 				return fmt.Errorf("setting gofer oom_score_adj for container %q: %v", c.ID, err)
 			}
 			log.Warningf("Gofer process (%d) not found setting oom_score_adj", c.GoferPid)
+		}
+	}
+
+	return nil
+}
+
+// adjustGoferOOMScoreAdj sets the oom_store_adj for the container's gofer.
+func (c *Container) adjustSeclambdaOOMScoreAdj() error {
+	if c.SeclambdaPid != 0 {
+		if err := setOOMScoreAdj(c.SeclambdaPid, -1000); err != nil {
+			// Ignore NotExist error because it can be returned when the sandbox
+			// exited while OOM score was being adjusted.
+			if !os.IsNotExist(err) {
+				return fmt.Errorf("setting seclambda oom_score_adj for container %q: %v", c.ID, err)
+			}
+			log.Warningf("seclambda process (%d) not found setting oom_score_adj", c.SeclambdaPid)
 		}
 	}
 

@@ -689,14 +689,17 @@ func (s *Sandbox) createSandboxProcess(conf *boot.Config, args *Args, startSyncF
 	if err != nil {
 		log.Debugf("Unable to open root namespace file")
 	}*/
+	if args.SandBox2seclambdaSend != nil {
+		cmd.ExtraFiles = append(cmd.ExtraFiles, args.SandBox2seclambdaSend)
+		cmd.Args = append(cmd.Args, "--sandbox2seclambda-fd", strconv.Itoa(nextFD))
+		nextFD++
+	}
 
-	cmd.ExtraFiles = append(cmd.ExtraFiles, args.SandBox2seclambdaSend)
-	cmd.Args = append(cmd.Args, "--sandbox2seclambda-fd", strconv.Itoa(nextFD))
-	nextFD++
-
-	cmd.ExtraFiles = append(cmd.ExtraFiles, args.Seclambda2SandboxRecv)
-	cmd.Args = append(cmd.Args, "--seclambda2sandbox-fd", strconv.Itoa(nextFD))
-	nextFD++
+	if args.Seclambda2SandboxRecv != nil {
+		cmd.ExtraFiles = append(cmd.ExtraFiles, args.Seclambda2SandboxRecv)
+		cmd.Args = append(cmd.Args, "--seclambda2sandbox-fd", strconv.Itoa(nextFD))
+		nextFD++
+	}
 
 	// Add container as the last argument.
 	cmd.Args = append(cmd.Args, s.ID)

@@ -80,6 +80,7 @@ type KernMsg struct {
 	Data      []byte
 	RecvChan  chan int
 	FuncName  string
+	IsFunc    bool
 }
 
 type transMsg struct {
@@ -89,6 +90,7 @@ type transMsg struct {
 	MsgID     int64
 	IsExit    bool
 	FuncName  string
+	IsFunc    bool
 }
 
 type ReturnMsg struct {
@@ -331,6 +333,7 @@ func makeTransMsg(msg KernMsg) transMsg {
 	m.Data = msg.Data
 	m.IsExit = false
 	m.MsgID = msgID
+	m.IsFunc = msg.IsFunc
 	msgID += 1
 	m.FuncName = msg.FuncName
 	return m
@@ -470,16 +473,16 @@ func receiveSeclambdaMsgs(seclambdaSide int, replyChan chan ReturnMsg) {
 		if err != nil {
 			// Other end closed the file
 			log.Infof("[Guard] Killing receiveSeclambdaMsgs")
-			break
+			var end ReturnMsg
+			end.IsExit = true
+			replyChan <- end
+			return
 		}
 		replyChan <- q
 	}
-	var end ReturnMsg
-	end.IsExit = true
-	replyChan <- end
 }
 
-func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSide int) {
+func (g *Guard) Run(ch chan KernMsg, ctr chan int, done chan int, sandboxSide int, seclambdaSide int) {
 
 	sandboxFile := os.NewFile(uintptr(sandboxSide), "sandbox-file")
 	encoder := gob.NewEncoder(sandboxFile)
@@ -549,7 +552,7 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSid
 		if err != nil {
 			log.Infof("[GRPC] Unable to connect to localhost")
 		}
-		defer conn.Close()
+		efer conn.Close()
 		c := pb.NewGreeterClient(conn)
 	*/
 	//log.Infof("[Guard] Send KeyInitReq to controller " + fname)
@@ -572,9 +575,14 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSid
 			}
 
 			trans := makeTransMsg(msg)
-			eventChanMap[trans.MsgID] = msg.RecvChan
+			if !msg.IsFunc {
+				eventChanMap[trans.MsgID] = msg.RecvChan
+			}
 			log.Infof("[Guard] Sending message to proxy with msgID: %v", trans.MsgID)
 			encoder.Encode(&trans)
+			if msg.IsFunc {
+				msg.RecvChan <- 1
+			}
 
 			/*
 				replied := false
@@ -629,13 +637,13 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, sandboxSide int, seclambdaSid
 		case <-ctr:
 			log.Infof("[Guard] Exiting the go routine")
 			encoder.Encode(&transMsg{IsExit: true})
-
+			done <- 1
 			/*
 							for k, v := range eventChanMap {
 				 				   v <- 0
 							}*/
 			//restore()
-			break
+			return
 
 		case recv := <-replyChan:
 			if recv.IsExit {
