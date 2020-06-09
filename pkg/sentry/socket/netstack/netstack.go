@@ -460,9 +460,9 @@ func (s *SocketOperations) Read(ctx context.Context, _ *fs.File, dst usermem.IOS
 		packet := gopacket.NewPacket(printBuf[:n], layers.LayerTypeDNS, gopacket.Default)
 		if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
 			dns, _ := dnsLayer.(*layers.DNS)
-			for _, qn := range dns.Questions {
+			/*for _, qn := range dns.Questions {
 				log.Infof("[ProxyLogger] Read ContainerName: %v ,DNSQuestion: %v", t.ContainerName(), qn)
-			}
+			}*/
 
 			for _, ans := range dns.Answers {
 				log.Infof("[ProxyLogger] Read ContainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
@@ -541,31 +541,41 @@ func (i *ioSequencePayload) DropFirst(n int) {
 	i.src = i.src.DropFirst(int(n))
 }
 
+func inBlackList(container *string) bool {
+	if *container != "" {
+		_, present := ServiceBlackList[*container]
+		return present
+	}
+	return true
+}
+
 // Write implements fs.FileOperations.Write.
 func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IOSequence, _ int64) (int64, error) {
 	f := &ioSequencePayload{ctx: ctx, src: src}
-	printBuf := make([]byte, src.NumBytes())
-	// Read till EOF maybe?
-	src.Reader(ctx.(*kernel.Task)).Read(printBuf)
-
-	peerAddr, _ := s.Endpoint.GetRemoteAddress()
-	localAddr, _ := s.Endpoint.GetLocalAddress()
-	// TODO: Implement protocol logging
 	t := ctx.(*kernel.Task)
+	if !inBlackList(t.ContainerName()) {
+		printBuf := make([]byte, src.NumBytes())
+		// Read till EOF maybe?
+		src.Reader(ctx.(*kernel.Task)).Read(printBuf)
 
-	var ip [16]byte
-	copy(ip[:], peerAddr.Addr)
-	remoteHost, ok := t.Kernel().LookupDNSMap(ip)
+		peerAddr, _ := s.Endpoint.GetRemoteAddress()
+		//localAddr, _ := s.Endpoint.GetLocalAddress()
+		// TODO: Implement protocol logging
 
-	log.Infof("[MessageLoggerWrite] ContainerName: %v, Remote Host: %v, Remote Port: %v, Local Addr: %v, Local Port: %v, Data: %v, HasRhost: %v", t.ContainerName(), remoteHost, peerAddr.Port, localAddr.Addr, localAddr.Port, printBuf, ok)
-	//log.Infof("[ProxyLogger] Data: %v", printBuf)
+		var ip [16]byte
+		copy(ip[:], peerAddr.Addr)
+		remoteHost, _ := t.Kernel().LookupDNSMap(ip)
 
-	url := generateUrl(remoteHost, peerAddr.Port, printBuf)
-	meta_str := fmt.Sprintf("%s:%s:%s:%d:%d:%s", url, "GET", peerAddr.Addr, peerAddr.Port, 0, "session_id0")
-	if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, printBuf, t.ContainerName()); r == 1 {
-		t.Infof("[ValidateWrite] Guard Allowed Action")
-	} else {
-		t.Infof("[ValidateWrite] Guard Disallowed Action")
+		//log.Infof("[MessageLoggerWrite] ContainerName: %v, Remote Host: %v, Remote Port: %v, Local Addr: %v, Local Port: %v, Data: %v, HasRhost: %v", t.ContainerName(), remoteHost, peerAddr.Port, localAddr.Addr, localAddr.Port, printBuf, ok)
+		//log.Infof("[ProxyLogger] Data: %v", printBuf)
+
+		url := generateUrl(remoteHost, peerAddr.Port, printBuf)
+		meta_str := fmt.Sprintf("%s:%s:%s:%d:%d:%s", url, "GET", peerAddr.Addr, peerAddr.Port, 0, "session_id0")
+		if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, printBuf, *t.ContainerName()); r == 1 {
+			t.Infof("[ValidateWrite] Guard Allowed Action")
+		} else {
+			t.Infof("[ValidateWrite] Guard Disallowed Action")
+		}
 	}
 
 	n, resCh, err := s.Endpoint.Write(f, tcpip.WriteOptions{})
@@ -2499,12 +2509,12 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 			packet := gopacket.NewPacket(printBuf[:n], layers.LayerTypeDNS, gopacket.Default)
 			if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
 				dns, _ := dnsLayer.(*layers.DNS)
-				for _, qn := range dns.Questions {
-					log.Infof("[ProxyLogger] ContainerName: %v ,DNSQuestion: %v", t.ContainerName(), qn)
-				}
+				/*for _, qn := range dns.Questions {
+					//log.Infof("[ProxyLogger] ContainerName: %v ,DNSQuestion: %v", t.ContainerName(), qn)
+				}*/
 
 				for _, ans := range dns.Answers {
-					log.Infof("[ProxyLogger] ConatainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
+					//log.Infof("[ProxyLogger] ConatainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
 					t.Kernel().UpdateDNSMap(ans.IP, ans.Name)
 				}
 				t.Kernel().PrintDNSMap()
@@ -2555,12 +2565,12 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 				packet := gopacket.NewPacket(printBuf[:printStart], layers.LayerTypeDNS, gopacket.Default)
 				if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
 					dns, _ := dnsLayer.(*layers.DNS)
-					for _, qn := range dns.Questions {
-						log.Infof("[ProxyLogger] RecvMsg ContainerName: %v ,DNSQuestion: %v", t.ContainerName(), qn)
-					}
+					/*for _, qn := range dns.Questions {
+						//log.Infof("[ProxyLogger] RecvMsg ContainerName: %v ,DNSQuestion: %v", t.ContainerName(), qn)
+					}*/
 
 					for _, ans := range dns.Answers {
-						log.Infof("[ProxyLogger] RecvMsg ConatainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
+						//log.Infof("[ProxyLogger] RecvMsg ConatainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
 						t.Kernel().UpdateDNSMap(ans.IP, ans.Name)
 					}
 					t.Kernel().PrintDNSMap()
@@ -2577,12 +2587,12 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 				packet := gopacket.NewPacket(printBuf[:printStart], layers.LayerTypeDNS, gopacket.Default)
 				if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
 					dns, _ := dnsLayer.(*layers.DNS)
-					for _, qn := range dns.Questions {
-						log.Infof("[ProxyLogger] RecvMsg ContainerName: %v ,DNSQuestion: %v", t.ContainerName(), qn)
-					}
+					/*for _, qn := range dns.Questions {
+						//log.Infof("[ProxyLogger] RecvMsg ContainerName: %v ,DNSQuestion: %v", t.ContainerName(), qn)
+					}*/
 
 					for _, ans := range dns.Answers {
-						log.Infof("[ProxyLogger] RecvMsg ContainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
+						//log.Infof("[ProxyLogger] RecvMsg ContainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
 						t.Kernel().UpdateDNSMap(ans.IP, ans.Name)
 					}
 					t.Kernel().PrintDNSMap()
@@ -2600,14 +2610,14 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 				if cerr && ntohs(inetAddr.Port) == 53 {
 					packet := gopacket.NewPacket(printBuf[:printStart], layers.LayerTypeDNS, gopacket.Default)
 					if dnsLayer := packet.Layer(layers.LayerTypeDNS); dnsLayer != nil {
-						dns, _ := dnsLayer.(*layers.DNS)
-						for _, qn := range dns.Questions {
-							log.Infof("[ProxyLogger] RecvMsg ContainerName: %v ,DNSQuestion: %v", t.ContainerName(), qn)
-						}
+						//dns, _ := dnsLayer.(*layers.DNS)
+						/*for _, qn := range dns.Questions {
+							//log.Infof("[ProxyLogger] RecvMsg ContainerName: %v ,DNSQuestion: %v", t.ContainerName(), qn)
+						}*/
 
-						for _, ans := range dns.Answers {
-							log.Infof("[ProxyLogger] RecvMsg ConatainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
-						}
+						/*for _, ans := range dns.Answers {
+							//log.Infof("[ProxyLogger] RecvMsg ConatainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
+						}*/
 					}
 				}
 
@@ -2634,30 +2644,33 @@ func generateUrl(hostname string, port uint16, data []byte) string {
 // SendMsg implements the linux syscall sendmsg(2) for sockets backed by
 // tcpip.Endpoint.
 func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []byte, flags int, haveDeadline bool, deadline ktime.Time, controlMessages socket.ControlMessages) (int, *syserr.Error) {
-	printBuf := make([]byte, src.NumBytes())
-	// Read till EOF maybe?
-	src.Reader(t).Read(printBuf)
 
-	peerAddr, _ := s.Endpoint.GetRemoteAddress()
-	localAddr, _ := s.Endpoint.GetLocalAddress()
-	// TODO: Implement protocol logging
+	if !inBlackList(t.ContainerName()) {
+		printBuf := make([]byte, src.NumBytes())
+		// Read till EOF maybe?
+		src.Reader(t).Read(printBuf)
 
-	//log.Infof("[ProxyLogger] ContainerName: %v, Socket SendMsg; Peer Addr: %v, Local Addr: %v", t.ContainerName(), peerAddr, localAddr)
-	//log.Infof("[ProxyLogger] ContainerName: %v, Socket Write; Peer Addr: %v, Local Addr: %v, Data_Str: %v, Data: %v", t.ContainerName(), peerAddr, localAddr, string(printBuf), printBuf)
+		peerAddr, _ := s.Endpoint.GetRemoteAddress()
+		//localAddr, _ := s.Endpoint.GetLocalAddress()
+		// TODO: Implement protocol logging
 
-	var ip [16]byte
-	copy(ip[:], peerAddr.Addr)
-	remoteHost, ok := t.Kernel().LookupDNSMap(ip)
+		//log.Infof("[ProxyLogger] ContainerName: %v, Socket SendMsg; Peer Addr: %v, Local Addr: %v", t.ContainerName(), peerAddr, localAddr)
+		//log.Infof("[ProxyLogger] ContainerName: %v, Socket Write; Peer Addr: %v, Local Addr: %v, Data_Str: %v, Data: %v", t.ContainerName(), peerAddr, localAddr, string(printBuf), printBuf)
 
-	log.Infof("[MessageLoggerSendMsg] ContainerName: %v, Remote Host: %v, Remote Port: %v, Local Addr: %v, Local Port: %v, Data: %v, HasRhost: %v", t.ContainerName(), remoteHost, peerAddr.Port, localAddr.Addr, localAddr.Port, printBuf, ok)
-	//log.Infof("[ProxyLogger] Data: %v", printBuf)
+		var ip [16]byte
+		copy(ip[:], peerAddr.Addr)
+		remoteHost, _ := t.Kernel().LookupDNSMap(ip)
 
-	url := generateUrl(remoteHost, peerAddr.Port, printBuf)
-	meta_str := fmt.Sprintf("%s:%s:%s:%d:%d:%s", url, "GET", peerAddr.Addr, peerAddr.Port, 0, "session_id0")
-	if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, printBuf, t.ContainerName()); r == 1 {
-		t.Infof("[ValidateSendMsg] Guard Allowed Action")
-	} else {
-		t.Infof("[ValidateSendMsg] Guard Disallowed Action")
+		//log.Infof("[MessageLoggerSendMsg] ContainerName: %v, Remote Host: %v, Remote Port: %v, Local Addr: %v, Local Port: %v, Data: %v, HasRhost: %v", t.ContainerName(), remoteHost, peerAddr.Port, localAddr.Addr, localAddr.Port, printBuf, ok)
+		//log.Infof("[ProxyLogger] Data: %v", printBuf)
+
+		url := generateUrl(remoteHost, peerAddr.Port, printBuf)
+		meta_str := fmt.Sprintf("%s:%s:%s:%d:%d:%s", url, "GET", peerAddr.Addr, peerAddr.Port, 0, "session_id0")
+		if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, printBuf, *t.ContainerName()); r == 1 {
+			t.Infof("[ValidateSendMsg] Guard Allowed Action")
+		} else {
+			t.Infof("[ValidateSendMsg] Guard Disallowed Action")
+		}
 	}
 
 	// Reject Unix control messages.

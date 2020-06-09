@@ -816,6 +816,6 @@ func (t *Task) ContainerID() string {
 }
 
 // ContainerName return t's container Name if it exists
-func (t *Task) ContainerName() string {
-	return t.containerName
+func (t *Task) ContainerName() *string {
+	return &t.containerName
 }

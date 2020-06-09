@@ -960,6 +960,11 @@ func (k *Kernel) CreateProcess(args CreateProcessArgs) (*ThreadGroup, ThreadID, 
 		}
 	}
 
+	if containerName != "" {
+		n := strings.Split(containerName, "-")
+		containerName = strings.Join(n[:len(n)-2], "-")
+	}
+
 	// Create the task.
 	config := &TaskConfig{
 		Kernel:                  k,

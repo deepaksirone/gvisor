@@ -10,6 +10,7 @@ go_library(
         "provider.go",
         "save_restore.go",
         "stack.go",
+	"filtered_services.go"
     ],
     visibility = [
         "//pkg/sentry:internal",
