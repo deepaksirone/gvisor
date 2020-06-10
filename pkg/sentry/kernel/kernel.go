@@ -387,6 +387,7 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 	//k.guardEventMu.Lock()
 	//defer k.guardEventMu.Unlock()
 
+	start := time.Now()
 	var msg guard.KernMsg
 	recvChan := make(chan int)
 
@@ -396,6 +397,9 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 	copy(msg.Data[:], data)
 	msg.RecvChan = recvChan
 	msg.FuncName = containerName
+	elapsed1 := time.Since(start)
+	log.Infof("[SendEventGuardMeasure] Time taken for message creation: %v", elapsed1)
+	start2 := time.Now()
 	k.guardChan <- msg
 	log.Infof("[Kernel] waiting for Guard response!")
 
@@ -408,6 +412,8 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 		return 0
 	}*/
 	recv := <-recvChan
+	elapsed2 := time.Since(start2)
+	log.Infof("[SendEventGuardMeasure] Time taken for guard decision: %v", elapsed2)
 	log.Infof("[Kernel] received Guard response!")
 
 	return recv

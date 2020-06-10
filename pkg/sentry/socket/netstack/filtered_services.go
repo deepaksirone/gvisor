@@ -17,4 +17,5 @@ var ServiceBlackList = map[string]struct{}{
 	"user-timeline-mongodb":        struct{}{},
 	"user-timeline-redis":          struct{}{},
 	"write-home-timeline-rabbitmq": struct{}{},
+	"jaeger":                       struct{}{},
 }

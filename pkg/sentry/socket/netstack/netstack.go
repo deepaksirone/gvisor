@@ -553,7 +553,12 @@ func inBlackList(container *string) bool {
 func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IOSequence, _ int64) (int64, error) {
 	f := &ioSequencePayload{ctx: ctx, src: src}
 	t := ctx.(*kernel.Task)
+	start := time.Now()
 	if !inBlackList(t.ContainerName()) {
+		elapsed1 := time.Since(start)
+
+		log.Infof("[ValidateWriteMeasure] Time for BlackListCheck: %v", elapsed1)
+		elapsed2 := time.Now()
 		printBuf := make([]byte, src.NumBytes())
 		// Read till EOF maybe?
 		src.Reader(ctx.(*kernel.Task)).Read(printBuf)
@@ -565,17 +570,25 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 		var ip [16]byte
 		copy(ip[:], peerAddr.Addr)
 		remoteHost, _ := t.Kernel().LookupDNSMap(ip)
-
+		elapsed3 := time.Since(elapsed2)
+		log.Infof("[ValidateWriteMeasure] Time for copy and DNS Lookup: %v", elapsed3)
+		elapsed4 := time.Now()
 		//log.Infof("[MessageLoggerWrite] ContainerName: %v, Remote Host: %v, Remote Port: %v, Local Addr: %v, Local Port: %v, Data: %v, HasRhost: %v", t.ContainerName(), remoteHost, peerAddr.Port, localAddr.Addr, localAddr.Port, printBuf, ok)
 		//log.Infof("[ProxyLogger] Data: %v", printBuf)
 
 		url := generateUrl(remoteHost, peerAddr.Port, printBuf)
 		meta_str := fmt.Sprintf("%s:%s:%s:%d:%d:%s", url, "GET", peerAddr.Addr, peerAddr.Port, 0, "session_id0")
+		elapsed5 := time.Since(elapsed4)
+		log.Infof("[ValidateWriteMeasure] Time for url generation: %v", elapsed5)
+
+		elapsed6 := time.Now()
 		if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, printBuf, *t.ContainerName()); r == 1 {
 			t.Infof("[ValidateWrite] Guard Allowed Action")
 		} else {
 			t.Infof("[ValidateWrite] Guard Disallowed Action")
 		}
+		elapsed7 := time.Since(elapsed6)
+		log.Infof("[ValidateWriteMeasure] Time waiting for guard decision: %v", elapsed7)
 	}
 
 	n, resCh, err := s.Endpoint.Write(f, tcpip.WriteOptions{})
@@ -2517,7 +2530,7 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 					//log.Infof("[ProxyLogger] ConatainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
 					t.Kernel().UpdateDNSMap(ans.IP, ans.Name)
 				}
-				t.Kernel().PrintDNSMap()
+				//t.Kernel().PrintDNSMap()
 			}
 
 		}
@@ -2634,9 +2647,9 @@ func (s *SocketOperations) RecvMsg(t *kernel.Task, dst usermem.IOSequence, flags
 func generateUrl(hostname string, port uint16, data []byte) string {
 	var url string
 	if hostname == "" {
-		url = "*;*/" + hex.EncodeToString(data)
+		url = fmt.Sprintf("*;*/%s", hex.EncodeToString(data))
 	} else {
-		url = fmt.Sprintf("%s;%d/", hostname, port) + hex.EncodeToString(data)
+		url = fmt.Sprintf("%s;%d/%s", hostname, port, hex.EncodeToString(data))
 	}
 	return url
 }
@@ -2645,7 +2658,12 @@ func generateUrl(hostname string, port uint16, data []byte) string {
 // tcpip.Endpoint.
 func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []byte, flags int, haveDeadline bool, deadline ktime.Time, controlMessages socket.ControlMessages) (int, *syserr.Error) {
 
+	start := time.Now()
 	if !inBlackList(t.ContainerName()) {
+		elapsed1 := time.Since(start)
+		log.Infof("[ValidateSendMsgMeasure] Time for BlackListCheck: %v", elapsed1)
+
+		start1 := time.Now()
 		printBuf := make([]byte, src.NumBytes())
 		// Read till EOF maybe?
 		src.Reader(t).Read(printBuf)
@@ -2661,16 +2679,26 @@ func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []
 		copy(ip[:], peerAddr.Addr)
 		remoteHost, _ := t.Kernel().LookupDNSMap(ip)
 
+		elapsed2 := time.Since(start1)
+		log.Infof("[ValidateSendMsgMeasure] Time for Alloc, copy and DNSLookup: %v", elapsed2)
+
+		start2 := time.Now()
 		//log.Infof("[MessageLoggerSendMsg] ContainerName: %v, Remote Host: %v, Remote Port: %v, Local Addr: %v, Local Port: %v, Data: %v, HasRhost: %v", t.ContainerName(), remoteHost, peerAddr.Port, localAddr.Addr, localAddr.Port, printBuf, ok)
 		//log.Infof("[ProxyLogger] Data: %v", printBuf)
 
 		url := generateUrl(remoteHost, peerAddr.Port, printBuf)
 		meta_str := fmt.Sprintf("%s:%s:%s:%d:%d:%s", url, "GET", peerAddr.Addr, peerAddr.Port, 0, "session_id0")
+		elapsed3 := time.Since(start2)
+		log.Infof("[ValidateSendMsgMeasure] Time for URL and meta_str creation: %v", elapsed3)
+		start3 := time.Now()
 		if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, printBuf, *t.ContainerName()); r == 1 {
 			t.Infof("[ValidateSendMsg] Guard Allowed Action")
 		} else {
 			t.Infof("[ValidateSendMsg] Guard Disallowed Action")
 		}
+
+		elapsed4 := time.Since(start3)
+		log.Infof("[ValidateSendMsgMeasure] Time for guard decision: %v", elapsed4)
 	}
 
 	// Reject Unix control messages.
