@@ -403,6 +403,10 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 	k.guardChan <- msg
 	log.Infof("[Kernel] waiting for Guard response!")
 
+	elapsed3 := time.Since(start2)
+	log.Infof("[SendEventGuardMeasure] Time taken for msg send to guard: %v", elapsed3)
+
+	start3 := time.Now()
 	/*select {
 	case recv := <-recvChan:
 		log.Infof("[Kernel] %s received Guard response!", containerName)
@@ -412,7 +416,7 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 		return 0
 	}*/
 	recv := <-recvChan
-	elapsed2 := time.Since(start2)
+	elapsed2 := time.Since(start3)
 	log.Infof("[SendEventGuardMeasure] Time taken for guard decision: %v", elapsed2)
 	log.Infof("[Kernel] received Guard response!")
 
