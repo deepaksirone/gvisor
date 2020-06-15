@@ -2,6 +2,7 @@ package guard
 
 import (
 	"encoding/gob"
+	"sync"
 	//"encoding/json"
 	//"fmt"
 	//zmq "github.com/deepaksirone/goczmq"
@@ -25,6 +26,7 @@ const (
 )
 
 var msgID = int64(0)
+var MapMutex = sync.RWMutex{}
 
 type Guard struct {
 	id int
@@ -60,6 +62,8 @@ type Guard struct {
 	graph *ListNode
 	// Current State
 	curState *ListNode
+	// Seclambda exitied
+	seclambda_exited bool
 }
 
 type Policy struct {
@@ -463,33 +467,124 @@ func setNS(fd, nsType uintptr) error {
 	return nil
 }*/
 
-func receiveSeclambdaMsgs(seclambdaSide int, replyChan chan ReturnMsg) {
+func (g *Guard) receiveSeclambdaMsgs(seclambdaSide int, eventChanMap *map[int64]chan int, isRunning *bool, rcvMsgCtr chan int) {
 
 	seclambdaFile := os.NewFile(uintptr(seclambdaSide), "seclambda-file")
 	decoder := gob.NewDecoder(seclambdaFile)
 	for {
-		var q ReturnMsg
-		err := decoder.Decode(&q)
+		// Non-blocking receive
+		/*select {
+		case <-rcvMsgCtr:
+			//rcvMsgCtr <- 1
+			//*isRunning = false
+			log.Infof("[Guard] receiveSeclambdaMsgs exiting by control channel")
+			rcvMsgCtr <- 1
+			return
+		default:
+
+		}*/
+		var recv ReturnMsg
+		err := decoder.Decode(&recv)
 		if err != nil {
 			// Other end closed the file
 			log.Infof("[Guard] Killing receiveSeclambdaMsgs")
-			var end ReturnMsg
-			end.IsExit = true
-			replyChan <- end
+			//var end ReturnMsg
+			recv.IsExit = true
+			//replyChan <- end
+			//return
+		}
+		//replyChan <- q
+		if recv.IsExit {
+			g.seclambda_exited = true
+			MapMutex.Lock()
+			for _, v := range *eventChanMap {
+				v <- 0
+				//delete(eventChanMap, k)
+			}
+			*eventChanMap = make(map[int64]chan int)
+			MapMutex.Unlock()
+			log.Infof("[Guard] Seclambda proxy exited; replying false to all new reqs")
+			//*isRunning = false
+			//return
+		}
+
+		if !g.seclambda_exited {
+			MapMutex.RLock()
+			if recv.allowed {
+				(*eventChanMap)[recv.MsgID] <- 1
+			} else {
+				(*eventChanMap)[recv.MsgID] <- 0
+			}
+			delete(*eventChanMap, recv.MsgID)
+			MapMutex.RUnlock()
+			log.Infof("[Guard] Getting reply from seclambdaSide: %v", recv)
+		} else {
+			MapMutex.RLock()
+			ch, pr := (*eventChanMap)[recv.MsgID]
+			MapMutex.RUnlock()
+			if pr {
+				ch <- 0
+			}
+		}
+	}
+}
+
+func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr chan int, eventChanMap *map[int64]chan int) {
+
+	sandboxFile := os.NewFile(uintptr(sandboxSide), "sandbox-file")
+	encoder := gob.NewEncoder(sandboxFile)
+	for {
+		select {
+		case msg := <-ch:
+			log.Infof("[Guard] Received a message from the kernel")
+			log.Infof("[Guard] The message struct : %v", msg)
+			g.requestNo += 1
+
+			if g.seclambda_exited {
+				msg.RecvChan <- 0
+				log.Infof("[Guard] Proxy Exited: Sending all false")
+				continue
+			}
+
+			trans := makeTransMsg(msg)
+			if !msg.IsFunc {
+				MapMutex.Lock()
+				(*eventChanMap)[trans.MsgID] = msg.RecvChan
+				MapMutex.Unlock()
+			}
+			log.Infof("[Guard] Sending message to proxy with msgID: %v", trans.MsgID)
+
+			err := encoder.Encode(&trans)
+			if err != nil {
+				msg.RecvChan <- 0
+				g.seclambda_exited = true
+			}
+
+			if msg.IsFunc {
+				msg.RecvChan <- 1
+			}
+		case <-sendMsgCtr:
+			log.Infof("[Guard] Shutting down sendSeclambdaMsgs")
+			encoder.Encode(&transMsg{IsExit: true})
+			sendMsgCtr <- 1
 			return
 		}
-		replyChan <- q
 	}
 }
 
 func (g *Guard) Run(ch chan KernMsg, ctr chan int, done chan int, sandboxSide int, seclambdaSide int) {
 
-	sandboxFile := os.NewFile(uintptr(sandboxSide), "sandbox-file")
-	encoder := gob.NewEncoder(sandboxFile)
-	replyChan := make(chan ReturnMsg)
+	//sandboxFile := os.NewFile(uintptr(sandboxSide), "sandbox-file")
+	//encoder := gob.NewEncoder(sandboxFile)
+	//replyChan := make(chan ReturnMsg)
 	eventChanMap := make(map[int64]chan int)
-	seclambda_exited := false
-	go receiveSeclambdaMsgs(seclambdaSide, replyChan)
+	sendMsgCtr := make(chan int)
+	rcvMsgCtr := make(chan int)
+	isRunning := true
+	//seclambda_exited := false
+	go g.receiveSeclambdaMsgs(seclambdaSide, &eventChanMap, &isRunning, rcvMsgCtr)
+	go g.sendSeclambdaMsgs(sandboxSide, ch, sendMsgCtr, &eventChanMap)
+
 	// Connect to the controller
 	/*
 		resp, err := http.Get("http://pages.cs.wisc.edu/")
@@ -563,80 +658,86 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, done chan int, sandboxSide in
 		// Receive signal from kernel
 		// and break out of this loop
 		select {
-		case msg := <-ch:
-			log.Infof("[Guard] Received a message from the kernel")
-			log.Infof("[Guard] The message struct : %v", msg)
-			g.requestNo += 1
+		/*case msg := <-ch:
+		log.Infof("[Guard] Received a message from the kernel")
+		log.Infof("[Guard] The message struct : %v", msg)
+		g.requestNo += 1
 
-			if seclambda_exited {
-				msg.RecvChan <- 0
-				log.Infof("[Guard] Proxy Exited: Sending all false")
+		if seclambda_exited {
+			msg.RecvChan <- 0
+			log.Infof("[Guard] Proxy Exited: Sending all false")
+			continue
+		}
+
+		trans := makeTransMsg(msg)
+		if !msg.IsFunc {
+			eventChanMap[trans.MsgID] = msg.RecvChan
+		}
+		log.Infof("[Guard] Sending message to proxy with msgID: %v", trans.MsgID)
+		encoder.Encode(&trans)
+		if msg.IsFunc {
+			msg.RecvChan <- 1
+		}
+
+		/*
+			replied := false
+			/*
+				if len(msg.Data) == 0 {
+					//msg.RecvChan <- 0 // [TODO] Respond with appropriate error
+					continue
+				}*/
+		/*
+			event := string(msg.EventName[:])
+			if event == "CHCK" {
+				SendToCtr(updater, TYPE_CHECK_STATUS, ACTION_NOOP, []byte(fname))
+				msg.RecvChan <- 1 //[TODO] Need to augment this structure
+				replied = true
 				continue
 			}
 
-			trans := makeTransMsg(msg)
-			if !msg.IsFunc {
-				eventChanMap[trans.MsgID] = msg.RecvChan
-			}
-			log.Infof("[Guard] Sending message to proxy with msgID: %v", trans.MsgID)
-			encoder.Encode(&trans)
-			if msg.IsFunc {
+			meta := string(msg.MetaData)
+			out := fmt.Sprintf("%s:%s:%s:%s", fname, event, meta, string(rid))
+			log.Infof("[Guard] Out string: %s", out)
+
+			info := strings.Split(meta, ":")
+			log.Infof("[Guard] info[0]: %v, info[1]: %v", info[0], info[1])
+			ev_hash := djb2hash(fname, event, info[0], info[1])
+			ev_id, present := g.get_event_id(int64(ev_hash))
+			if event == "GETE" {
+				SendToCtr(updater, TYPE_CHECK_EVENT, ACTION_NOOP, []byte(out))
 				msg.RecvChan <- 1
+				replied = true
+			} else if event == "ENDE" {
+				g.PolicyInit()
+				msg.RecvChan <- 1 // [TODO] Send an empty message to the hypercall
+				replied = true
+				SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
+			} else if event == "SEND" || event == "RESP" {
+				if present && g.CheckPolicy(ev_id) {
+					msg.RecvChan <- 1
+					SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
+				} else {
+
+					log.Infof("[Guard] Event: %v not present or not allowed by policy", ev_id)
+					msg.RecvChan <- 0
+					SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
+				}
+				replied = true
 			}
 
-			/*
-				replied := false
-				/*
-					if len(msg.Data) == 0 {
-						//msg.RecvChan <- 0 // [TODO] Respond with appropriate error
-						continue
-					}*/
-			/*
-				event := string(msg.EventName[:])
-				if event == "CHCK" {
-					SendToCtr(updater, TYPE_CHECK_STATUS, ACTION_NOOP, []byte(fname))
-					msg.RecvChan <- 1 //[TODO] Need to augment this structure
-					replied = true
-					continue
-				}
-
-				meta := string(msg.MetaData)
-				out := fmt.Sprintf("%s:%s:%s:%s", fname, event, meta, string(rid))
-				log.Infof("[Guard] Out string: %s", out)
-
-				info := strings.Split(meta, ":")
-				log.Infof("[Guard] info[0]: %v, info[1]: %v", info[0], info[1])
-				ev_hash := djb2hash(fname, event, info[0], info[1])
-				ev_id, present := g.get_event_id(int64(ev_hash))
-				if event == "GETE" {
-					SendToCtr(updater, TYPE_CHECK_EVENT, ACTION_NOOP, []byte(out))
-					msg.RecvChan <- 1
-					replied = true
-				} else if event == "ENDE" {
-					g.PolicyInit()
-					msg.RecvChan <- 1 // [TODO] Send an empty message to the hypercall
-					replied = true
-					SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
-				} else if event == "SEND" || event == "RESP" {
-					if present && g.CheckPolicy(ev_id) {
-						msg.RecvChan <- 1
-						SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
-					} else {
-
-						log.Infof("[Guard] Event: %v not present or not allowed by policy", ev_id)
-						msg.RecvChan <- 0
-						SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
-					}
-					replied = true
-				}
-
-				if !replied {
-					msg.RecvChan <- 0 //[TODO] Invalid message!
-				}*/
+			if !replied {
+				msg.RecvChan <- 0 //[TODO] Invalid message!
+			}*/
 
 		case <-ctr:
 			log.Infof("[Guard] Exiting the go routine")
-			encoder.Encode(&transMsg{IsExit: true})
+			//encoder.Encode(&transMsg{IsExit: true})
+			//rcvMsgCtr <- 1
+			//<-rcvMsgCtr
+
+			sendMsgCtr <- 1
+			<-sendMsgCtr
+
 			done <- 1
 			/*
 							for k, v := range eventChanMap {
@@ -645,7 +746,7 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, done chan int, sandboxSide in
 			//restore()
 			return
 
-		case recv := <-replyChan:
+			/*case recv := <-replyChan:
 			if recv.IsExit {
 				seclambda_exited = true
 				for _, v := range eventChanMap {
