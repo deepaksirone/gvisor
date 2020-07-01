@@ -503,7 +503,7 @@ func (g *Guard) receiveSeclambdaMsgs(seclambdaSide int, eventChanMap *map[int64]
 			}
 			*eventChanMap = make(map[int64]chan int)
 			MapMutex.Unlock()
-			log.Infof("[Guard] Seclambda proxy exited; replying false to all new reqs")
+			//log.Infof("[Guard] Seclambda proxy exited; replying false to all new reqs")
 			//*isRunning = false
 			//return
 		}
@@ -517,7 +517,7 @@ func (g *Guard) receiveSeclambdaMsgs(seclambdaSide int, eventChanMap *map[int64]
 			}
 			delete(*eventChanMap, recv.MsgID)
 			MapMutex.RUnlock()
-			log.Infof("[Guard] Getting reply from seclambdaSide: %v", recv)
+			//log.Infof("[Guard] Getting reply from seclambdaSide: %v", recv)
 		} else {
 			MapMutex.RLock()
 			ch, pr := (*eventChanMap)[recv.MsgID]
@@ -536,13 +536,13 @@ func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr c
 	for {
 		select {
 		case msg := <-ch:
-			log.Infof("[Guard] Received a message from the kernel")
-			log.Infof("[Guard] The message struct : %v", msg)
-			g.requestNo += 1
+			//log.Infof("[Guard] Received a message from the kernel")
+			//log.Infof("[Guard] The message struct : %v", msg)
+			//g.requestNo += 1
 
 			if g.seclambda_exited {
 				msg.RecvChan <- 0
-				log.Infof("[Guard] Proxy Exited: Sending all false")
+				//log.Infof("[Guard] Proxy Exited: Sending all false")
 				continue
 			}
 
@@ -552,17 +552,19 @@ func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr c
 				(*eventChanMap)[trans.MsgID] = msg.RecvChan
 				MapMutex.Unlock()
 			}
-			log.Infof("[Guard] Sending message to proxy with msgID: %v", trans.MsgID)
+			//log.Infof("[Guard] Sending message to proxy with msgID: %v", trans.MsgID)
 
 			err := encoder.Encode(&trans)
 			if err != nil {
 				msg.RecvChan <- 0
 				g.seclambda_exited = true
+				continue
 			}
 
 			if msg.IsFunc {
 				msg.RecvChan <- 1
 			}
+
 		case <-sendMsgCtr:
 			log.Infof("[Guard] Shutting down sendSeclambdaMsgs")
 			encoder.Encode(&transMsg{IsExit: true})
