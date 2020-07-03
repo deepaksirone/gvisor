@@ -406,7 +406,7 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 	elapsed3 := time.Since(start2)
 	log.Infof("[SendEventGuardMeasure] Time taken for msg send to guard: %v", elapsed3)
 
-	start3 := time.Now()
+	//start3 := time.Now()
 	/*select {
 	case recv := <-recvChan:
 		log.Infof("[Kernel] %s received Guard response!", containerName)
@@ -415,12 +415,31 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 		log.Infof("[Kernel] %s Timed out waiting for response", containerName)
 		return 0
 	}*/
-	recv := <-recvChan
+
+	event := string(msg.EventName[:])
+
+	if event == "GETE" || event == "SEND" || event == "RESP" {
+		recv := 0
+		for {
+			select {
+			case recv = <-recvChan:
+				elapsed2 := time.Since(start)
+				//log.Printf("[SendEventGuardMeasure] Time to wake up: %v", time.Since(respTime))
+				log.Infof("[SendEventGuardMeasure] Time taken for guard decision: %v", elapsed2)
+				return recv
+				//case <-time.After(4 * time.Microsecond):
+			}
+		}
+	}
+
+	return 1
+
+	/*recv := <-recvChan
 	elapsed2 := time.Since(start3)
 	log.Infof("[SendEventGuardMeasure] Time taken for guard decision: %v", elapsed2)
 	log.Infof("[Kernel] received Guard response!")
 
-	return recv
+	return recv*/
 }
 
 func (k *Kernel) SendHostnameGuard(containerName string) {
@@ -431,7 +450,9 @@ func (k *Kernel) SendHostnameGuard(containerName string) {
 		msg.FuncName = containerName
 		msg.IsFunc = true
 		k.guardChan <- msg
+		log.Infof("[SendHostnameGuard] Waiting for reply")
 		<-recvChan
+		log.Infof("[SendHostnameGuard] Received reply")
 	}
 }
 
