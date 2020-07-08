@@ -36,6 +36,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	//"runtime"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -372,7 +373,7 @@ func (k *Kernel) Init(args InitKernelArgs) error {
 	k.monotonicClock = &timekeeperClock{tk: args.Timekeeper, c: sentrytime.Monotonic}
 	k.futexes = futex.NewManager()
 	k.netlinkPorts = port.New()
-	k.guard = guard.New("127.0.0.1", 5000)
+	k.guard = guard.New("127.0.0.1", 5000, k.Sandbox2seclambdaFD, k.Seclambda2sandboxFD)
 	k.guardChan = make(chan guard.KernMsg)
 	k.guardCtrChan = make(chan int)
 	k.guardDoneChan = make(chan int)
@@ -384,10 +385,14 @@ func (k *Kernel) SendDummyGuard() {
 }
 
 func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte, containerName string) int {
-	//k.guardEventMu.Lock()
+	k.guardEventMu.Lock()
 	//defer k.guardEventMu.Unlock()
+	/*if event_name[0] == 'S' || event_name[0] == 'R' || event_name[0] == 'E' {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+	}*/
 
-	start := time.Now()
+	//start := time.Now()
 	var msg guard.KernMsg
 	recvChan := make(chan int)
 
@@ -397,14 +402,14 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 	copy(msg.Data[:], data)
 	msg.RecvChan = recvChan
 	msg.FuncName = containerName
-	elapsed1 := time.Since(start)
-	log.Infof("[SendEventGuardMeasure] Time taken for message creation: %v", elapsed1)
-	start2 := time.Now()
-	k.guardChan <- msg
-	log.Infof("[Kernel] waiting for Guard response!")
+	//elapsed1 := time.Since(start)
+	//log.Infof("[SendEventGuardMeasure] Time taken for message creation: %v", elapsed1)
+	//start2 := time.Now()
+	//k.guardChan <- msg
+	//log.Infof("[Kernel] waiting for Guard response!")
 
-	elapsed3 := time.Since(start2)
-	log.Infof("[SendEventGuardMeasure] Time taken for msg send to guard: %v", elapsed3)
+	//elapsed3 := time.Since(start2)
+	//log.Infof("[SendEventGuardMeasure] Time taken for msg send to guard: %v", elapsed3)
 
 	//start3 := time.Now()
 	/*select {
@@ -416,20 +421,47 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 		return 0
 	}*/
 
-	event := string(msg.EventName[:])
+	event := msg.EventName[:]
 
-	if event == "GETE" || event == "SEND" || event == "RESP" {
+	if event[0] == byte('G') {
 		recv := 0
+		k.guardChan <- msg
 		for {
 			select {
 			case recv = <-recvChan:
-				elapsed2 := time.Since(start)
+				//elapsed2 := time.Since(start)
 				//log.Printf("[SendEventGuardMeasure] Time to wake up: %v", time.Since(respTime))
-				log.Infof("[SendEventGuardMeasure] Time taken for guard decision: %v", elapsed2)
+				//log.Infof("[SendEventGuardMeasure] GETE Time taken for guard decision: %v", elapsed2)
+				defer k.guardEventMu.Unlock()
 				return recv
 				//case <-time.After(4 * time.Microsecond):
 			}
 		}
+	} else if event[0] == 'S' || event[0] == 'R' {
+		transMsg := guard.MakeTransMsg(msg)
+
+		go func() {
+			k.guard.Encoder.Encode(transMsg)
+			defer k.guardEventMu.Unlock()
+		}()
+
+		meta := string(msg.MetaData)
+		fname := k.guard.Get_func_name()
+		info := strings.Split(meta, ":")
+		ev_hash := guard.Djb2hash(fname, string(event), info[0], info[1])
+		ev_id, present := k.guard.Get_event_id(int64(ev_hash))
+		if present && k.guard.CheckPolicy(ev_id) {
+			return 1
+		} else {
+			//elapsed2 := time.Since(start)
+			//log.Infof("[SendEventGuardMeasure] SEND-RESP Time taken for guard decision: %v", elapsed2)
+
+			return 0
+		}
+	} else if event[0] == 'E' {
+		k.guard.PolicyInit()
+		defer k.guardEventMu.Unlock()
+		return 1
 	}
 
 	return 1

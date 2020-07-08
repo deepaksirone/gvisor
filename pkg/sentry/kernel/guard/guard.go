@@ -68,6 +68,10 @@ type Guard struct {
 	seclambda_exited bool
 	// Function name
 	funcName string
+	// Encoder for sandbox to seclambda
+	Encoder *gob.Encoder
+	// Decore for seclamda to sandbox
+	Decoder *gob.Decoder
 }
 
 type Policy struct {
@@ -132,7 +136,7 @@ func strip(s string, c byte) string {
 	return res
 }
 
-func djb2hash(func_name, event, url, action string) uint64 {
+func Djb2hash(func_name, event, url, action string) uint64 {
 	inp := func_name + event + url + action
 	var hash uint64 = 5381
 	for i := 0; i < len(inp); i++ {
@@ -141,7 +145,7 @@ func djb2hash(func_name, event, url, action string) uint64 {
 	return hash
 }
 
-func (g *Guard) get_event_id(event_hash int64) (int, bool) {
+func (g *Guard) Get_event_id(event_hash int64) (int, bool) {
 	id, present := g.eventMap[event_hash]
 	return id, present
 }
@@ -155,7 +159,7 @@ func get_time() int64 {
 	return 1000000*r.Sec + int64(r.Usec)
 }
 
-func New(ctrIP string, ctrPort int64) Guard {
+func New(ctrIP string, ctrPort int64, sandboxSide int, seclambdaSide int) Guard {
 	var g Guard
 	g.startTime = get_time()
 	g.requestNo = 0
@@ -169,6 +173,12 @@ func New(ctrIP string, ctrPort int64) Guard {
 	g.urlWhitelist = make(map[string]int)
 	g.stateTable = make(map[string]int)
 	g.policyTable = make(map[string]*ListNode)
+
+	sandboxFile := os.NewFile(uintptr(sandboxSide), "sandbox-file")
+	g.Encoder = gob.NewEncoder(sandboxFile)
+
+	seclambdaFile := os.NewFile(uintptr(seclambdaSide), "seclambda-file")
+	g.Decoder = gob.NewDecoder(seclambdaFile)
 
 	return g
 }
@@ -427,7 +437,7 @@ func (g *Guard) PolicyInit() {
 	g.curState = g.graph
 }
 
-func makeTransMsg(msg KernMsg) transMsg {
+func MakeTransMsg(msg KernMsg) transMsg {
 	var m transMsg
 	m.EventName = msg.EventName
 	m.MetaData = msg.MetaData
@@ -440,12 +450,12 @@ func makeTransMsg(msg KernMsg) transMsg {
 	return m
 }
 
-func (g *Guard) get_func_name() string {
+func (g *Guard) Get_func_name() string {
 	return g.funcName
 }
 
 func (g *Guard) CheckPolicy(event_id int) bool {
-	fname := g.get_func_name()
+	fname := g.Get_func_name()
 	_, present := g.policyTable[fname]
 	if !present {
 		return false
@@ -570,8 +580,8 @@ func setNS(fd, nsType uintptr) error {
 
 func (g *Guard) receiveSeclambdaMsgs(seclambdaSide int, eventChanMap *map[int64]chan int, isRunning *bool, rcvMsgCtr chan int) {
 
-	seclambdaFile := os.NewFile(uintptr(seclambdaSide), "seclambda-file")
-	decoder := gob.NewDecoder(seclambdaFile)
+	//seclambdaFile := os.NewFile(uintptr(seclambdaSide), "seclambda-file")
+	//decoder := gob.NewDecoder(seclambdaFile)
 	for {
 		// Non-blocking receive
 		/*select {
@@ -588,7 +598,7 @@ func (g *Guard) receiveSeclambdaMsgs(seclambdaSide int, eventChanMap *map[int64]
 		isExit := false
 		//s := time.Now()
 		//seclambdaFile.SetDeadline(time.Now().Add(1 * time.Microsecond))
-		err := decoder.Decode(&recv)
+		err := g.Decoder.Decode(&recv)
 
 		/*if os.IsTimeout(err) {
 			//log.Printf("[Guard] Decode timeout %v", err)
@@ -674,8 +684,8 @@ func (g *Guard) receiveSeclambdaMsgs(seclambdaSide int, eventChanMap *map[int64]
 
 func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr chan int, eventChanMap *map[int64]chan int) {
 
-	sandboxFile := os.NewFile(uintptr(sandboxSide), "sandbox-file")
-	encoder := gob.NewEncoder(sandboxFile)
+	//sandboxFile := os.NewFile(uintptr(sandboxSide), "sandbox-file")
+	//encoder := gob.NewEncoder(sandboxFile)
 	for {
 		select {
 		case msg := <-ch:
@@ -683,7 +693,7 @@ func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr c
 			log.Infof("[Guard] The message struct : %v", msg)
 			//g.requestNo += 1
 
-			//s3 := time.Now()
+			s3 := time.Now()
 			//log.Printf("[sendSeclambdaMsgs] Wallclock time before processing message with ID: %v : %v", msgID, s3.UnixNano())
 			//log.Println("[Guard] Received a message from the kernel")
 			//log.Printf("[Guard] The message struct : %v\n", msg)
@@ -695,7 +705,7 @@ func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr c
 				continue
 			}
 
-			trans := makeTransMsg(msg)
+			trans := MakeTransMsg(msg)
 			if msg.IsFunc || string(msg.EventName[:]) == "GETE" {
 				log.Infof("[Guard] The trans message struct : %v", trans)
 				MapMutex.Lock()
@@ -712,7 +722,7 @@ func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr c
 			var err error
 			//for {
 			//sandboxFile.SetDeadline(time.Now().Add(1 * time.Microsecond))
-			err = encoder.Encode(&trans)
+			err = g.Encoder.Encode(&trans)
 
 			/*	if os.IsTimeout(err) {
 					log.Infof("[Guard] Error timed out %v", err)
@@ -739,8 +749,9 @@ func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr c
 				/*SendToCtr(updater, TYPE_CHECK_STATUS, ACTION_NOOP, []byte(fname))
 				//TODO: Change this to a seclambdaFD comm
 				//encoder.Encode(ReturnMsg{Allowed: true, MsgID: msg.MsgID})
-				//msg.RecvChan <- 1 //[TODO] Need to augment this structure
+				msg.RecvChan <- 1 //[TODO] Need to augment this structure
 				replied = true*/
+				msg.RecvChan <- 1
 				continue
 			}
 
@@ -775,24 +786,24 @@ func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr c
 				//start2 := time.Now()
 
 				//encoder.Encode(ReturnMsg{Allowed: true, MsgID: msg.MsgID})
-				//msg.RecvChan <- 1 // [TODO] Send an empty message to the hypercall
+				msg.RecvChan <- 1 // [TODO] Send an empty message to the hypercall
 				//log.Println("[SeclambdaMeasure] ENDE: Time to send to sandbox: %s", time.Since(start2))
 				//replied = true
 				//start3 := time.Now()
 				//SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
 				//log.Println("[SeclambdaMeasure] ENDE: Time for async controller notif: %s", time.Since(start3))
 			} else if event == "SEND" || event == "RESP" {
-				//log.Println("[SeclambdaMeasure] SEND-RESP: Time for Aux processing: %s", time.Since(start))
-				//start1 := time.Now()
+				log.Infof("[SeclambdaMeasure] SEND-RESP: Time for Aux processing: %s", time.Since(s3))
+				start1 := time.Now()
 				meta := string(msg.MetaData)
 				//out := fmt.Sprintf("%s:%s:%s:%s", fname, event, meta, string(rid))
 				//log.Infof("[Seclambda] Out string: %s", out)
-				fname := g.get_func_name()
+				fname := g.Get_func_name()
 				info := strings.Split(meta, ":")
 				//log.Println("[Seclambda] info[0]: %v, info[1]: %v", info[0], info[1])
-				ev_hash := djb2hash(fname, event, info[0], info[1])
+				ev_hash := Djb2hash(fname, event, info[0], info[1])
 				//start1 := time.Now()
-				ev_id, present := g.get_event_id(int64(ev_hash))
+				ev_id, present := g.Get_event_id(int64(ev_hash))
 
 				if present && g.CheckPolicy(ev_id) {
 					//TODO: Change this to a seclambdaFD comm
@@ -809,8 +820,8 @@ func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr c
 				} else {
 					//log.Infof("[Seclambda] Event: %v not present or not allowed by policy", ev_id)
 					//TODO: Change this to a seclambdaFD comm
-					//log.Println("[SeclambdaMeasure] SEND-RESP-absent: Time for Policy Check (absent): %s", time.Since(start1))
-					//start2 := time.Now()
+					log.Infof("[SeclambdaMeasure] SEND-RESP-absent: Time for Policy Check (absent): %s", time.Since(start1))
+					start2 := time.Now()
 
 					//encoder.Encode(ReturnMsg{Allowed: false, MsgID: msg.MsgID})
 
@@ -818,6 +829,7 @@ func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr c
 					//log.Printf("[Seclambda] Timestamp of replying to  message with ID: %v : %v", msg.MsgID, s.UnixNano())
 					//log.Println("[SeclambdaMeasure] SEND-RESP-absent: Time to send to sandbox: %s", time.Since(start2))
 					msg.RecvChan <- 0
+					log.Infof("[SeclambdaMeasure] SEND-RESP-absent: Time to send to sandbox: %s", time.Since(start2))
 					//start3 := time.Now()
 					//SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
 					//log.Println("[SeclambdaMeasure] SEND-RESP-absent: Time for async controller notif: %s", time.Since(start3))
@@ -841,7 +853,7 @@ func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr c
 
 		case <-sendMsgCtr:
 			log.Infof("[Guard] Shutting down sendSeclambdaMsgs")
-			encoder.Encode(&transMsg{IsExit: true})
+			g.Encoder.Encode(&transMsg{IsExit: true})
 			sendMsgCtr <- 1
 			return
 		}
