@@ -72,6 +72,8 @@ type Guard struct {
 	Encoder *gob.Encoder
 	// Decore for seclamda to sandbox
 	Decoder *gob.Decoder
+	// CheckPolicy Mutex
+	checkPolicyMu sync.Mutex
 }
 
 type Policy struct {
@@ -455,6 +457,8 @@ func (g *Guard) Get_func_name() string {
 }
 
 func (g *Guard) CheckPolicy(event_id int) bool {
+	g.checkPolicyMu.Lock()
+	defer g.checkPolicyMu.Unlock()
 	fname := g.Get_func_name()
 	_, present := g.policyTable[fname]
 	if !present {
