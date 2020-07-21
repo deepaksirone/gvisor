@@ -34,8 +34,6 @@ var ServiceBlackList = map[string]struct{}{
 	"rating-redis":             struct{}{},
 	"review-storage-memcached": struct{}{},
 	"review-storage-mongodb":   struct{}{},
-	"user-memcached":           struct{}{},
-	"user-mongodb":             struct{}{},
 	"user-review-mongodb":      struct{}{},
 	"user-review-redis":        struct{}{},
 }
