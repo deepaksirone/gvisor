@@ -1025,7 +1025,11 @@ func (k *Kernel) CreateProcess(args CreateProcessArgs) (*ThreadGroup, ThreadID, 
 
 	if containerName != "" {
 		n := strings.Split(containerName, "-")
-		containerName = strings.Join(n[:len(n)-2], "-")
+		if len(n) > 2 {
+			containerName = strings.Join(n[:len(n)-2], "-")
+		} else {
+			containerName = strings.Join(n, "-")
+		}
 	}
 
 	// Create the task.
