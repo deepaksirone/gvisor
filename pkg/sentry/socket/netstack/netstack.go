@@ -2691,7 +2691,13 @@ func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []
 		//elapsed3 := time.Since(start2)
 		//log.Infof("[ValidateSendMsgMeasure] Time for URL and meta_str creation: %v", elapsed3)
 		//start3 := time.Now()
-		if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, printBuf, *t.ContainerName()); r == 1 {
+		event := []byte("SEND")
+		if len(printBuf) >= 3 {
+			if printBuf[0] == 'G' && printBuf[1] == 'E' && printBuf[2] == 'T' {
+				event = []byte("GETE")
+			}
+		}
+		if r := t.Kernel().SendEventGuard(event, meta_str, printBuf, *t.ContainerName()); r == 1 {
 			//t.Infof("[ValidateSendMsg] Guard Allowed Action")
 		} else {
 			//t.Infof("[ValidateSendMsg] Guard Disallowed Action")

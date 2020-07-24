@@ -424,19 +424,36 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 	event := msg.EventName[:]
 
 	if event[0] == byte('G') {
-		recv := 0
-		k.guardChan <- msg
-		for {
-			select {
-			case recv = <-recvChan:
-				//elapsed2 := time.Since(start)
-				//log.Printf("[SendEventGuardMeasure] Time to wake up: %v", time.Since(respTime))
-				//log.Infof("[SendEventGuardMeasure] GETE Time taken for guard decision: %v", elapsed2)
-				defer k.guardEventMu.Unlock()
-				return recv
-				//case <-time.After(4 * time.Microsecond):
+		//recv := 0
+		defer k.guardEventMu.Unlock()
+		trans := guard.MakeTransMsg(msg)
+		k.guard.Encoder.Encode(trans)
+		//k.guardChan <- msg
+		var rec guard.ReturnMsg
+		err := k.guard.Decoder.Decode(&rec)
+		if err == nil {
+			log.Infof("[SendEventGuardMeasure] No error")
+			if rec.Allowed {
+				return 1
+			} else {
+				return 0
 			}
+		} else {
+			log.Infof("[SendEventGuardMeasure] ERRORED")
+			return 0
 		}
+		/*
+			for {
+				select {
+				case recv = <-recvChan:
+					//elapsed2 := time.Since(start)
+					//log.Printf("[SendEventGuardMeasure] Time to wake up: %v", time.Since(respTime))
+					//log.Infof("[SendEventGuardMeasure] GETE Time taken for guard decision: %v", elapsed2)
+					defer k.guardEventMu.Unlock()
+					return recv
+					//case <-time.After(4 * time.Microsecond):
+				}
+			}*/
 	} else if event[0] == 'S' || event[0] == 'R' {
 		transMsg := guard.MakeTransMsg(msg)
 
