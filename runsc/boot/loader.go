@@ -454,7 +454,13 @@ func (l *Loader) installSeccompFilters() error {
 
 // Run runs the root container.
 func (l *Loader) Run() error {
+	//hostname, _ := specutils.EnvVar(l.spec.Process.Env, "HOSTNAME")
+	//l.k.SendHostnameGuard(hostname)
+
 	err := l.run()
+	hostname, _ := specutils.EnvVar(l.spec.Process.Env, "HOSTNAME")
+	l.k.SendHostnameGuard(hostname)
+
 	l.ctrl.manager.startResultChan <- err
 	if err != nil {
 		// Give the controller some time to send the error to the
