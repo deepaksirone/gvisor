@@ -458,8 +458,8 @@ func (l *Loader) Run() error {
 	//l.k.SendHostnameGuard(hostname)
 
 	err := l.run()
-	hostname, _ := specutils.EnvVar(l.spec.Process.Env, "HOSTNAME")
-	l.k.SendHostnameGuard(hostname)
+	//hostname, _ := specutils.EnvVar(l.spec.Process.Env, "HOSTNAME")
+	//l.k.SendHostnameGuard(hostname)
 
 	l.ctrl.manager.startResultChan <- err
 	if err != nil {
