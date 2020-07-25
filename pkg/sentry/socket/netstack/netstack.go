@@ -552,8 +552,8 @@ func inBlackList(container *string) bool {
 // Write implements fs.FileOperations.Write.
 func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IOSequence, _ int64) (int64, error) {
 	f := &ioSequencePayload{ctx: ctx, src: src}
-	t := ctx.(*kernel.Task)
-	start := time.Now()
+	//t := ctx.(*kernel.Task)
+	/*start := time.Now()
 	event := []byte("SEND")
 	if !inBlackList(t.ContainerName()) {
 		//elapsed1 := time.Since(start)
@@ -598,7 +598,7 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 		//elapsed7 := time.Since(elapsed6)
 		//log.Infof("[ValidateWriteMeasure] Time waiting for guard decision: %v", elapsed7)
 	}
-	log.Infof("[ValidateWriteMeasure] Write syscall overhead for event : %v : %v", event, time.Since(start))
+	log.Infof("[ValidateWriteMeasure] Write syscall overhead for event : %v : %v", event, time.Since(start))*/
 	n, resCh, err := s.Endpoint.Write(f, tcpip.WriteOptions{})
 	if err == tcpip.ErrWouldBlock {
 		return 0, syserror.ErrWouldBlock
@@ -2666,7 +2666,7 @@ func generateUrl(hostname string, port uint16, data []byte) string {
 // tcpip.Endpoint.
 func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []byte, flags int, haveDeadline bool, deadline ktime.Time, controlMessages socket.ControlMessages) (int, *syserr.Error) {
 
-	start := time.Now()
+	/*start := time.Now()
 	event := []byte("SEND")
 	if !inBlackList(t.ContainerName()) {
 		//elapsed1 := time.Since(start)
@@ -2715,7 +2715,7 @@ func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []
 		//elapsed4 := time.Since(start3)
 		//log.Infof("[ValidateSendMsgMeasure] Time for guard decision: %v", elapsed4)
 	}
-	log.Infof("[ValidateSendMsgMeasure] The SendMsg system call overhead for event: %v : %v", event, time.Since(start))
+	log.Infof("[ValidateSendMsgMeasure] The SendMsg system call overhead for event: %v : %v", event, time.Since(start))*/
 	// Reject Unix control messages.
 	if !controlMessages.Unix.Empty() {
 		return 0, syserr.ErrInvalidArgument
