@@ -44,7 +44,7 @@ var (
 	rootDir     = flag.String("root", "", "root directory for storage of container state.")
 	logFilename = flag.String("log", "", "file path where internal debug information is written, default is stdout.")
 	logFormat   = flag.String("log-format", "text", "log format: text (default), json, or json-k8s.")
-	debug       = flag.Bool("debug", true, "enable debug logging.")
+	debug       = flag.Bool("debug", false, "enable debug logging.")
 	showVersion = flag.Bool("version", false, "show version and exit.")
 	// TODO(gvisor.dev/issue/193): support systemd cgroups
 	systemdCgroup = flag.Bool("systemd-cgroup", false, "Use systemd for cgroups. NOT SUPPORTED.")
@@ -53,7 +53,7 @@ var (
 	// system that are not covered by the runtime spec.
 
 	// Debugging flags.
-	debugLog        = flag.String("debug-log", "/mydata/runsc_logs/", "additional location for logs. If it ends with '/', log files are created inside the directory with default names. The following variables are available: %TIMESTAMP%, %COMMAND%.")
+	debugLog        = flag.String("debug-log", "", "additional location for logs. If it ends with '/', log files are created inside the directory with default names. The following variables are available: %TIMESTAMP%, %COMMAND%.")
 	logPackets      = flag.Bool("log-packets", false, "enable network packet logging.")
 	logFD           = flag.Int("log-fd", -1, "file descriptor to log to.  If set, the 'log' flag is ignored.")
 	debugLogFD      = flag.Int("debug-log-fd", -1, "file descriptor to write debug logs to.  If set, the 'debug-log-dir' flag is ignored.")
