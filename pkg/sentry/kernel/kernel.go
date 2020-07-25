@@ -432,14 +432,14 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 		var rec guard.ReturnMsg
 		err := k.guard.Decoder.Decode(&rec)
 		if err == nil {
-			log.Infof("[SendEventGuardMeasure] No error")
+			//log.Infof("[SendEventGuardMeasure] No error")
 			if rec.Allowed {
 				return 1
 			} else {
 				return 0
 			}
 		} else {
-			log.Infof("[SendEventGuardMeasure] ERRORED")
+			//log.Infof("[SendEventGuardMeasure] ERRORED")
 			return 0
 		}
 		/*

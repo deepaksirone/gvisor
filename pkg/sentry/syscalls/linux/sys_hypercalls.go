@@ -6,6 +6,7 @@ import (
 	"gvisor.dev/gvisor/pkg/sentry/kernel"
 	"gvisor.dev/gvisor/pkg/usermem"
 	"strings"
+	"time"
 )
 
 func Hypercall1(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.SyscallControl, error) {
@@ -49,6 +50,7 @@ func Hypercall1(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.Sy
 // args[0] = fd; args[1] = hostname ptr; args[2] = payload ptr
 // Assuming the payload contains plaintext HTTP data
 func ValidateSSLSend(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.SyscallControl, error) {
+	start := time.Now()
 	fd := args[0].Int()
 	hostname_ptr := args[1].Pointer()
 	ip_ptr := args[2].Pointer()
@@ -92,17 +94,18 @@ func ValidateSSLSend(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kern
 		url = strings.Split(strings.TrimSpace(tmp), " ")[1]
 		has_body = 1
 	} else if method == "GET" {
-		t.Infof("[ValidateSSLSend] GET encountered!")
+		//t.Infof("[ValidateSSLSend] GET encountered!")
 	}
 
 	meta_str := fmt.Sprintf("%s:%s:%s:%s:%d:%s", hostname+url, method, ip, port, has_body, session_id)
 	t.Infof("[ValidateSSLSend] The meta str: %s", meta_str)
 	if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, data_slice, *t.ContainerName()); r == 1 {
-		t.Infof("[ValidateSSLSend] Guard allowed the action")
+		//t.Infof("[ValidateSSLSend] Guard allowed the action")
 	} else {
-		t.Infof("[ValidateSSLSend] Guard disallowed action")
+		//t.Infof("[ValidateSSLSend] Guard disallowed action")
 	}
 
+	t.Infof("[ValidateSSLSend] Time taken for ValidateSSLSend: %v", time.Since(start))
 	// Need to write protect the payload ptr address range
 	return 0, nil, nil
 }
