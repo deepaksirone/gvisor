@@ -804,7 +804,7 @@ func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr c
 				//log.Println("[SeclambdaMeasure] ENDE: Time for async controller notif: %s", time.Since(start3))
 			} else if event == "SEND" || event == "RESP" {
 				//log.Infof("[SeclambdaMeasure] SEND-RESP: Time for Aux processing: %s", time.Since(s3))
-				start1 := time.Now()
+				//start1 := time.Now()
 				meta := string(msg.MetaData)
 				//out := fmt.Sprintf("%s:%s:%s:%s", fname, event, meta, string(rid))
 				//log.Infof("[Seclambda] Out string: %s", out)
