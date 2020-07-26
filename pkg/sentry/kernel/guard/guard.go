@@ -654,17 +654,23 @@ func (g *Guard) receiveSeclambdaMsgs(seclambdaSide int, eventChanMap *map[int64]
 			if recv.Allowed {
 				//s := time.Now()
 				//log.Printf("[receiveSeclambdaMsgs] Timestamp just before delivering response to caller: %v", s.UnixNano())
-				log.Infof("[Guard] Sending allowed reply back: %v", recv.MsgID)
+				//log.Infof("[Guard] Sending allowed reply back: %v", recv.MsgID)
 				(*eventChanMap)[recv.MsgID] <- 1
+				if recv.MsgID == 0 {
+					return
+				}
 				//elapsed1 := time.Since(start)
 				//log.Printf("[receiveSeclambdaMsgs] Time spent sending response back: %v", elapsed1)
 
 			} else {
 				//s := time.Now()
-				respTime = time.Now()
+				//respTime = time.Now()
 				//log.Printf("[receiveSeclambdaMsgs] Timestamp just before delivering response to caller: %v", s.UnixNano())
-				log.Infof("[Guard] Sending denied reply back: %v", recv.MsgID)
+				//log.Infof("[Guard] Sending denied reply back: %v", recv.MsgID)
 				(*eventChanMap)[recv.MsgID] <- 0
+				if recv.MsgID == 0 {
+					return
+				}
 				//elapsed1 := time.Since(start)
 				//log.Printf("[receiveSeclambdaMsgs] Time spent sending response back: %v", elapsed1)
 			}
@@ -697,7 +703,7 @@ func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr c
 			log.Infof("[Guard] The message struct : %v", msg)
 			//g.requestNo += 1
 
-			s3 := time.Now()
+			//s3 := time.Now()
 			//log.Printf("[sendSeclambdaMsgs] Wallclock time before processing message with ID: %v : %v", msgID, s3.UnixNano())
 			//log.Println("[Guard] Received a message from the kernel")
 			//log.Printf("[Guard] The message struct : %v\n", msg)
@@ -797,7 +803,7 @@ func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr c
 				//SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
 				//log.Println("[SeclambdaMeasure] ENDE: Time for async controller notif: %s", time.Since(start3))
 			} else if event == "SEND" || event == "RESP" {
-				log.Infof("[SeclambdaMeasure] SEND-RESP: Time for Aux processing: %s", time.Since(s3))
+				//log.Infof("[SeclambdaMeasure] SEND-RESP: Time for Aux processing: %s", time.Since(s3))
 				start1 := time.Now()
 				meta := string(msg.MetaData)
 				//out := fmt.Sprintf("%s:%s:%s:%s", fname, event, meta, string(rid))
@@ -824,8 +830,8 @@ func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr c
 				} else {
 					//log.Infof("[Seclambda] Event: %v not present or not allowed by policy", ev_id)
 					//TODO: Change this to a seclambdaFD comm
-					log.Infof("[SeclambdaMeasure] SEND-RESP-absent: Time for Policy Check (absent): %s", time.Since(start1))
-					start2 := time.Now()
+					//log.Infof("[SeclambdaMeasure] SEND-RESP-absent: Time for Policy Check (absent): %s", time.Since(start1))
+					//start2 := time.Now()
 
 					//encoder.Encode(ReturnMsg{Allowed: false, MsgID: msg.MsgID})
 
@@ -833,7 +839,7 @@ func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr c
 					//log.Printf("[Seclambda] Timestamp of replying to  message with ID: %v : %v", msg.MsgID, s.UnixNano())
 					//log.Println("[SeclambdaMeasure] SEND-RESP-absent: Time to send to sandbox: %s", time.Since(start2))
 					msg.RecvChan <- 0
-					log.Infof("[SeclambdaMeasure] SEND-RESP-absent: Time to send to sandbox: %s", time.Since(start2))
+					//log.Infof("[SeclambdaMeasure] SEND-RESP-absent: Time to send to sandbox: %s", time.Since(start2))
 					//start3 := time.Now()
 					//SendToCtr(updater, TYPE_EVENT, ACTION_NOOP, []byte(out))
 					//log.Println("[SeclambdaMeasure] SEND-RESP-absent: Time for async controller notif: %s", time.Since(start3))
