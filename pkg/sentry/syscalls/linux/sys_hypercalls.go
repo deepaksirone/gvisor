@@ -113,7 +113,7 @@ func ValidateSSLSend(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kern
 	}
 
 	meta_str := fmt.Sprintf("%s:%s:%s:%s:%d:%s", url, method, ip, port, has_body, session_id)
-	t.Infof("[ValidateSSLSend] The meta str: %s", meta_str)
+	//t.Infof("[ValidateSSLSend] The meta str: %s", meta_str)
 	event := []byte("SEND")
 	if method == "GET" {
 		event = []byte("GETE")
