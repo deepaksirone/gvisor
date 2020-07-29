@@ -1123,6 +1123,11 @@ func (k *Kernel) Start() error {
 	return nil
 }
 
+func (k *Kernel) StartGuard() {
+	go k.guard.Run(k.guardChan, k.guardCtrChan, k.guardDoneChan, k.Sandbox2seclambdaFD, k.Seclambda2sandboxFD)
+	k.guardRunning = true
+}
+
 // pauseTimeLocked pauses all Timers and Timekeeper updates.
 //
 // Preconditions: Any task goroutines running in k must be stopped. k.extMu
@@ -1289,6 +1294,11 @@ func (k *Kernel) WaitExited() {
 	k.tasks.liveGoroutines.Wait()
 	k.guardCtrChan <- 1 // Kill the guard after all tasks have exited
 	<-k.guardDoneChan
+	k.guardRunning = false
+}
+
+func (k *Kernel) IsGuardOn() bool {
+	return k.guardRunning
 }
 
 // Kill requests that all tasks in k immediately exit as if group exiting with

@@ -606,6 +606,9 @@ func (l *Loader) createContainer(cid string) error {
 func (l *Loader) startContainer(spec *specs.Spec, conf *Config, cid string, files []*os.File) error {
 
 	hostname, _ := specutils.EnvVar(spec.Process.Env, "HOSTNAME")
+	if !l.k.IsGuardOn() {
+		l.k.StartGuard()
+	}
 	l.k.SendHostnameGuard(hostname)
 	// Create capabilities.
 	caps, err := specutils.Capabilities(conf.EnableRaw, spec.Process.Capabilities)
