@@ -250,6 +250,7 @@ type Kernel struct {
 
 	guardRunning bool
 
+	hostnameSent bool
 	//Controller Channel
 	guardCtrChan chan int
 
@@ -423,40 +424,41 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 
 	event := msg.EventName[:]
 
-	if event[0] == byte('G') {
-		//recv := 0
-		defer k.guardEventMu.Unlock()
-		trans := guard.MakeTransMsg(msg)
-		k.guard.Encoder.Encode(trans)
-		var rec guard.ReturnMsg
-		err := k.guard.Decoder.Decode(&rec)
+	/*if event[0] == byte('G') {
+	//recv := 0
+	defer k.guardEventMu.Unlock()
+	trans := guard.MakeTransMsg(msg)
+	k.guard.Encoder.Encode(trans)
+	var rec guard.ReturnMsg
+	err := k.guard.Decoder.Decode(&rec)
 
-		//k.guardChan <- msg
-		if err == nil {
-			//log.Infof("[SendEventGuardMeasure] No error")
-			if rec.Allowed {
-				return 1
-			} else {
-				return 0
-			}
+	//k.guardChan <- msg
+	if err == nil {
+		//log.Infof("[SendEventGuardMeasure] No error")
+		if rec.Allowed {
+			return 1
 		} else {
 			return 0
 		}
+	} else {
+		return 0
+	}
 
-		/*for {
-			select {
-			case recv = <-recvChan:
-				//elapsed2 := time.Since(start)
-				//log.Printf("[SendEventGuardMeasure] Time to wake up: %v", time.Since(respTime))
-				//log.Infof("[SendEventGuardMeasure] GETE Time taken for guard decision: %v", elapsed2)
-				defer k.guardEventMu.Unlock()
-				return recv
-				//case <-time.After(4 * time.Microsecond):
-			}
-		}*/
-	} else if event[0] == 'S' || event[0] == 'R' {
+	/*for {
+		select {
+		case recv = <-recvChan:
+			//elapsed2 := time.Since(start)
+			//log.Printf("[SendEventGuardMeasure] Time to wake up: %v", time.Since(respTime))
+			//log.Infof("[SendEventGuardMeasure] GETE Time taken for guard decision: %v", elapsed2)
+			defer k.guardEventMu.Unlock()
+			return recv
+			//case <-time.After(4 * time.Microsecond):
+		}
+	}*/
+	/*} else*/
+	if event[0] == 'S' || event[0] == 'R' || event[0] == 'G' {
 		transMsg := guard.MakeTransMsg(msg)
-
+		//defer k.guardEventMu.Unlock()
 		go func() {
 			k.guard.Encoder.Encode(transMsg)
 			defer k.guardEventMu.Unlock()
@@ -467,11 +469,13 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 		info := strings.Split(meta, ":")
 		ev_hash := guard.Djb2hash(fname, string(event), info[0], info[1])
 		ev_id, present := k.guard.Get_event_id(int64(ev_hash))
+		log.Infof("[SendEventGuardMeasure] event_hash: %v, event_id: %v, present: %v", ev_hash, ev_id, present)
 		if present && k.guard.CheckPolicy(ev_id) {
+			log.Infof("[SendEventGuardMeasure] SEND-RESP-GET Guard Allowed action")
 			return 1
 		} else {
 			//elapsed2 := time.Since(start)
-			//log.Infof("[SendEventGuardMeasure] SEND-RESP Time taken for guard decision: %v", elapsed2)
+			log.Infof("[SendEventGuardMeasure] SEND-RESP-GET Guard Disallowed action")
 
 			return 0
 		}
@@ -492,7 +496,7 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 }
 
 func (k *Kernel) SendHostnameGuard(containerName string) {
-	if k.guardRunning {
+	if !k.hostnameSent {
 		var msg guard.KernMsg
 		recvChan := make(chan int)
 		msg.RecvChan = recvChan
@@ -502,6 +506,7 @@ func (k *Kernel) SendHostnameGuard(containerName string) {
 		log.Infof("[SendHostnameGuard] Waiting for reply")
 		<-recvChan
 		log.Infof("[SendHostnameGuard] Received reply")
+		k.hostnameSent = true
 	}
 }
 
@@ -1049,6 +1054,7 @@ func (k *Kernel) CreateProcess(args CreateProcessArgs) (*ThreadGroup, ThreadID, 
 		}
 	}
 
+	log.Infof("[Kernel] The containerName: %v", containerName)
 	// Create the task.
 	config := &TaskConfig{
 		Kernel:                  k,
