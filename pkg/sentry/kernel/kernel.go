@@ -385,7 +385,16 @@ func (k *Kernel) SendDummyGuard() {
 	k.guardChan <- guard.KernMsg{}
 }
 
-func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte, containerName string) int {
+type MetaStruct struct {
+	Url       string
+	Method    string
+	PeerAddr  string
+	PeerPort  int
+	HasBody   int
+	SessionId string
+}
+
+func (k *Kernel) SendEventGuard(event_name []byte, metaStr MetaStruct, data []byte, containerName string) int {
 	k.guardEventMu.Lock()
 	//defer k.guardEventMu.Unlock()
 	/*if event_name[0] == 'S' || event_name[0] == 'R' || event_name[0] == 'E' {
@@ -398,9 +407,16 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 	recvChan := make(chan int)
 
 	copy(msg.EventName[:], event_name)
-	msg.MetaData = []byte(meta_str)
-	msg.Data = make([]byte, len(data))
-	copy(msg.Data[:], data)
+	//msg.MetaData = []byte(meta_str)
+	msg.Url = metaStr.Url
+	msg.Method = metaStr.Method
+	msg.PeerAddr = metaStr.PeerAddr
+	msg.PeerPort = metaStr.PeerPort
+	msg.HasBody = metaStr.HasBody
+	msg.SessionId = metaStr.SessionId
+
+	//msg.Data = make([]byte, len(data))
+	//copy(msg.Data[:], data)
 	msg.RecvChan = recvChan
 	msg.FuncName = containerName
 	//elapsed1 := time.Since(start)
@@ -464,10 +480,10 @@ func (k *Kernel) SendEventGuard(event_name []byte, meta_str string, data []byte,
 			defer k.guardEventMu.Unlock()
 		}()
 
-		meta := string(msg.MetaData)
+		//meta := string(msg.MetaData)
 		fname := k.guard.Get_func_name()
-		info := strings.Split(meta, ":")
-		ev_hash := guard.Djb2hash(fname, string(event), info[0], info[1])
+		//info := strings.Split(meta, ":")
+		ev_hash := guard.Djb2hash(fname, string(event), msg.Url, msg.Method)
 		ev_id, present := k.guard.Get_event_id(int64(ev_hash))
 		log.Infof("[SendEventGuardMeasure] event_hash: %v, event_id: %v, present: %v", ev_hash, ev_id, present)
 		if present && k.guard.CheckPolicy(ev_id) {

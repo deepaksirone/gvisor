@@ -1,10 +1,12 @@
 package linux
 
 import (
+	"encoding/hex"
 	"fmt"
 	"gvisor.dev/gvisor/pkg/sentry/arch"
 	"gvisor.dev/gvisor/pkg/sentry/kernel"
 	"gvisor.dev/gvisor/pkg/usermem"
+	"strconv"
 	"strings"
 )
 
@@ -46,10 +48,20 @@ func Hypercall1(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.Sy
 	return 0, nil, nil
 }
 
+func generateUrl(hostname string, port string, data []byte) string {
+	var url string
+	if hostname == "" {
+		url = fmt.Sprintf("*;*/%s", hex.EncodeToString(data))
+	} else {
+		url = fmt.Sprintf("%s;%s/%s", hostname, port, hex.EncodeToString(data))
+	}
+	return url
+}
+
 // args[0] = fd; args[1] = hostname ptr; args[2] = payload ptr
 // Assuming the payload contains plaintext HTTP data
 func ValidateSSLSend(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.SyscallControl, error) {
-	fd := args[0].Int()
+	//fd := args[0].Int()
 	hostname_ptr := args[1].Pointer()
 	ip_ptr := args[2].Pointer()
 	//port := args[2].Int()
@@ -78,29 +90,49 @@ func ValidateSSLSend(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kern
 	})
 	src.Reader(t).Read(data_slice)
 
-	data_str := string(data_slice)
+	//data_str := string(data_slice)
 
-	t.Infof("[ValidateSSLSend] fd: %v, hostname: %v, ip: %v, session_id: %v, data: %s, data", fd, hostname, ip, session_id,
-		data_str)
+	//t.Infof("[ValidateSSLSend] fd: %v, hostname: %v, ip: %v, session_id: %v, data: %s, data", fd, hostname, ip, session_id,
+	//	data_str)
+	url := generateUrl(hostname, port, data_slice)
 
-	method := strings.Split(data_str, " ")[0]
-	url := ""
+	//t.Infof("[ValidateSSLSend] fd: %v, hostname: %v, ip: %v, session_id: %v, data: %s, data", fd, hostname, ip, session_id,
+	//	data_str)
+	method := ""
+	if data_slice[0] == 'G' && data_slice[1] == 'E' && data_slice[2] == 'T' {
+		method = "GET"
+	} else {
+		method = "POST"
+	}
+
 	has_body := 0
 
 	if method == "POST" {
-		tmp := strings.Split(data_str, "\r\n")[0]
-		url = strings.Split(strings.TrimSpace(tmp), " ")[1]
+		//tmp := strings.Split(data_str, "\r\n")[0]
 		has_body = 1
 	} else if method == "GET" {
-		t.Infof("[ValidateSSLSend] GET encountered!")
+		//t.Infof("[ValidateSSLSend] GET encountered!")
 	}
 
-	meta_str := fmt.Sprintf("%s:%s:%s:%s:%d:%s", hostname+url, method, ip, port, has_body, session_id)
-	t.Infof("[ValidateSSLSend] The meta str: %s", meta_str)
-	if r := t.Kernel().SendEventGuard([]byte("SEND"), meta_str, data_slice, *t.ContainerName()); r == 1 {
-		t.Infof("[ValidateSSLSend] Guard allowed the action")
+	//meta_str := fmt.Sprintf("%s:%s:%s:%s:%d:%s", url, method, ip, port, has_body, session_id)
+	var m kernel.MetaStruct
+	m.Url = url
+	m.Method = method
+	m.PeerAddr = string(ip)
+	m.PeerPort, _ = strconv.Atoi(port)
+	m.HasBody = has_body
+	m.SessionId = session_id
+
+	//t.Infof("[ValidateSSLSend] The meta str: %s", meta_str)
+	event := []byte("SEND")
+	if method == "GET" {
+		event = []byte("GETE")
+	}
+
+	if r := t.Kernel().SendEventGuard(event, m, data_slice, *t.ContainerName()); r == 1 {
+		//t.Infof("[ValidateSSLSend] Guard allowed the action")
 	} else {
-		t.Infof("[ValidateSSLSend] Guard disallowed action")
+		//t.Infof("[ValidateSSLSend] Guard disallowed action")
 	}
 
 	// Need to write protect the payload ptr address range

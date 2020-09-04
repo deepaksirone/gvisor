@@ -579,7 +579,15 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 		//log.Infof("[ProxyLogger] Data: %v", printBuf)
 
 		url := generateUrl(remoteHost, peerAddr.Port, printBuf)
-		meta_str := fmt.Sprintf("%s:%s:%s:%d:%d:%s", url, "GET", peerAddr.Addr, peerAddr.Port, 0, "session_id0")
+		//meta_str := fmt.Sprintf("%s:%s:%s:%d:%d:%s", url, "GET", peerAddr.Addr, peerAddr.Port, 0, "session_id0")
+		var metaStr kernel.MetaStruct
+		metaStr.Url = url
+		metaStr.Method = "GET"
+		metaStr.PeerAddr = peerAddr.Addr.String()
+		metaStr.PeerPort = int(peerAddr.Port)
+		metaStr.HasBody = 0
+		metaStr.SessionId = "session_id0"
+
 		//elapsed5 := time.Since(elapsed4)
 		//log.Infof("[ValidateWriteMeasure] Time for url generation: %v", elapsed5)
 		if len(printBuf) >= 3 {
@@ -589,7 +597,7 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 		}
 
 		//elapsed6 := time.Now()
-		if r := t.Kernel().SendEventGuard(event, meta_str, printBuf, *t.ContainerName()); r == 1 {
+		if r := t.Kernel().SendEventGuard(event, metaStr, printBuf, *t.ContainerName()); r == 1 {
 			//t.Infof("[ValidateWrite] Guard Allowed Action")
 		} else {
 			//t.Infof("[ValidateWrite] Guard Disallowed Action")
@@ -2696,7 +2704,16 @@ func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []
 		//log.Infof("[ProxyLogger] Data: %v", printBuf)
 
 		url := generateUrl(remoteHost, peerAddr.Port, printBuf)
-		meta_str := fmt.Sprintf("%s:%s:%s:%d:%d:%s", url, "GET", peerAddr.Addr, peerAddr.Port, 0, "session_id0")
+		//meta_str := fmt.Sprintf("%s:%s:%s:%d:%d:%s", url, "GET", peerAddr.Addr, peerAddr.Port, 0, "session_id0")
+
+		var metaStr kernel.MetaStruct
+		metaStr.Url = url
+		metaStr.Method = "GET"
+		metaStr.PeerAddr = peerAddr.Addr.String()
+		metaStr.PeerPort = int(peerAddr.Port)
+		metaStr.HasBody = 0
+		metaStr.SessionId = "session_id0"
+
 		//elapsed3 := time.Since(start2)
 		//log.Infof("[ValidateSendMsgMeasure] Time for URL and meta_str creation: %v", elapsed3)
 		//start3 := time.Now()
@@ -2706,7 +2723,7 @@ func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []
 			}
 		}
 
-		if r := t.Kernel().SendEventGuard(event, meta_str, printBuf, *t.ContainerName()); r == 1 {
+		if r := t.Kernel().SendEventGuard(event, metaStr, printBuf, *t.ContainerName()); r == 1 {
 			//t.Infof("[ValidateSendMsg] Guard Allowed Action")
 		} else {
 			//t.Infof("[ValidateSendMsg] Guard Disallowed Action")

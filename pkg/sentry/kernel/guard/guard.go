@@ -84,21 +84,33 @@ type Policy struct {
 
 type KernMsg struct {
 	EventName [4]byte
-	MetaData  []byte
-	Data      []byte
-	RecvChan  chan int
-	FuncName  string
-	IsFunc    bool
+	//MetaData  []byte
+	Url       string
+	Method    string
+	PeerAddr  string
+	PeerPort  int
+	HasBody   int
+	SessionId string
+	//Data      []byte
+	RecvChan chan int
+	FuncName string
+	IsFunc   bool
 }
 
 type transMsg struct {
 	EventName [4]byte
-	MetaData  []byte
-	Data      []byte
-	MsgID     int64
-	IsExit    bool
-	FuncName  string
-	IsFunc    bool
+	//MetaData  []byte
+	Url       string
+	Method    string
+	PeerAddr  string
+	PeerPort  int
+	HasBody   int
+	SessionId string
+	//Data      []byte
+	MsgID    int64
+	IsExit   bool
+	FuncName string
+	IsFunc   bool
 }
 
 type ReturnMsg struct {
@@ -325,8 +337,15 @@ func (g *Guard) PolicyInit() {
 func MakeTransMsg(msg KernMsg) transMsg {
 	var m transMsg
 	m.EventName = msg.EventName
-	m.MetaData = msg.MetaData
-	m.Data = msg.Data
+	//m.MetaData = msg.MetaData
+	m.Url = msg.Url
+	m.Method = msg.Method
+	m.PeerAddr = msg.PeerAddr
+	m.PeerPort = msg.PeerPort
+	m.HasBody = msg.HasBody
+	m.SessionId = msg.SessionId
+
+	//m.Data = msg.Data
 	m.IsExit = false
 	m.MsgID = msgID
 	m.IsFunc = msg.IsFunc
@@ -626,13 +645,13 @@ func (g *Guard) sendSeclambdaMsgs(sandboxSide int, ch chan KernMsg, sendMsgCtr c
 			} else if event == "SEND" || event == "RESP" {
 				//log.Infof("[SeclambdaMeasure] SEND-RESP: Time for Aux processing: %s", time.Since(s3))
 				//start1 := time.Now()
-				meta := string(msg.MetaData)
+				//meta := string(msg.MetaData)
 				//out := fmt.Sprintf("%s:%s:%s:%s", fname, event, meta, string(rid))
 				//log.Infof("[Seclambda] Out string: %s", out)
 				fname := g.Get_func_name()
-				info := strings.Split(meta, ":")
+				//info := strings.Split(meta, ":")
 				//log.Println("[Seclambda] info[0]: %v, info[1]: %v", info[0], info[1])
-				ev_hash := Djb2hash(fname, event, info[0], info[1])
+				ev_hash := Djb2hash(fname, event, msg.Url, msg.Method)
 				//start1 := time.Now()
 				ev_id, present := g.Get_event_id(int64(ev_hash))
 
