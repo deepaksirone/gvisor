@@ -333,7 +333,7 @@ func New(conf *boot.Config, args Args) (*Container, error) {
 				return err
 			}
 
-			sandBox2seclambdaSend, seclambda2SandboxRecv, e := c.createSeclambdaProxy("node0.controller.cs799-serverless-pg0.utah.cloudlab.us", 5000, conf, args.Spec)
+			sandBox2seclambdaSend, seclambda2SandboxRecv, e := c.createSeclambdaProxy("node0.controller.cs799-serverless-PG0.wisc.cloudlab.us", 5000, conf, args.Spec)
 
 			//if dummyErr := c.createDummyProcess(); dummyErr != nil {
 			//	log.Debugf("[DummyProcess] Error launching : %v", dummyErr)

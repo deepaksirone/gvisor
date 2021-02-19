@@ -396,7 +396,7 @@ type MetaStruct struct {
 
 func (k *Kernel) SendEventGuard(event_name []byte, metaStr MetaStruct, data []byte, containerName string) int {
 	k.guardEventMu.Lock()
-	//defer k.guardEventMu.Unlock()
+	defer k.guardEventMu.Unlock()
 	/*if event_name[0] == 'S' || event_name[0] == 'R' || event_name[0] == 'E' {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
@@ -472,13 +472,17 @@ func (k *Kernel) SendEventGuard(event_name []byte, metaStr MetaStruct, data []by
 		}
 	}*/
 	/*} else*/
+	//var wg sync.WaitGroup
 	if event[0] == 'S' || event[0] == 'R' || event[0] == 'G' {
 		transMsg := guard.MakeTransMsg(msg)
 		//defer k.guardEventMu.Unlock()
+		/*wg.Add(1)
 		go func() {
+			defer wg.Done()
 			k.guard.Encoder.Encode(transMsg)
-			defer k.guardEventMu.Unlock()
-		}()
+			//defer k.guardEventMu.Unlock()
+		}()*/
+		k.guard.Encoder.Encode(transMsg)
 
 		//meta := string(msg.MetaData)
 		fname := k.guard.Get_func_name()
@@ -487,17 +491,18 @@ func (k *Kernel) SendEventGuard(event_name []byte, metaStr MetaStruct, data []by
 		ev_id, present := k.guard.Get_event_id(int64(ev_hash))
 		log.Infof("[SendEventGuardMeasure] event_hash: %v, event_id: %v, present: %v", ev_hash, ev_id, present)
 		if present && k.guard.CheckPolicy(ev_id) {
+			//wg.Wait()
 			log.Infof("[SendEventGuardMeasure] SEND-RESP-GET Guard Allowed action")
 			return 1
 		} else {
 			//elapsed2 := time.Since(start)
+			//wg.Wait()
 			log.Infof("[SendEventGuardMeasure] SEND-RESP-GET Guard Disallowed action")
-
 			return 0
 		}
 	} else if event[0] == 'E' {
 		k.guard.PolicyInit()
-		defer k.guardEventMu.Unlock()
+		//defer k.guardEventMu.Unlock()
 		return 1
 	}
 
@@ -514,15 +519,39 @@ func (k *Kernel) SendEventGuard(event_name []byte, metaStr MetaStruct, data []by
 func (k *Kernel) SendHostnameGuard(containerName string) {
 	if !k.hostnameSent {
 		var msg guard.KernMsg
+		var retMsg guard.ReturnMsg
+
 		recvChan := make(chan int)
 		msg.RecvChan = recvChan
 		msg.FuncName = containerName
 		msg.IsFunc = true
-		k.guardChan <- msg
+		transMsg := guard.MakeTransMsg(msg)
+
+		if err := k.guard.Encoder.Encode(&transMsg); err != nil {
+			log.Infof("[SendHostnameGuard] Error funcMessage to seclambda proxy")
+		}
+
 		log.Infof("[SendHostnameGuard] Waiting for reply")
-		<-recvChan
+		if err := k.guard.Decoder.Decode(&retMsg); err != nil {
+			log.Infof("[SendHostnameGuard] Error receiving reply from seclambda proxy")
+		}
+
 		log.Infof("[SendHostnameGuard] Received reply")
+
+		if len(retMsg.Policy) > 0 {
+			k.guard.PolicyInitHandler(retMsg.Policy)
+			log.Infof("[SendHostnameGuard] Initialized Policy")
+		}
+
 		k.hostnameSent = true
+
+		/*
+			k.guardChan <- msg
+			log.Infof("[SendHostnameGuard] Waiting for reply")
+			<-recvChan
+			log.Infof("[SendHostnameGuard] Received reply")
+			k.hostnameSent = true
+		*/
 	}
 }
 

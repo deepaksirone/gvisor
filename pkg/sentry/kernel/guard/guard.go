@@ -1,6 +1,7 @@
 package guard
 
 import (
+	//"bufio"
 	"encoding/gob"
 	"encoding/json"
 	"gvisor.dev/gvisor/pkg/log"
@@ -184,9 +185,11 @@ func New(ctrIP string, ctrPort int64, sandboxSide int, seclambdaSide int) Guard 
 	g.policyTable = make(map[string]*ListNode)
 
 	sandboxFile := os.NewFile(uintptr(sandboxSide), "sandbox-file")
+	//bufSandboxFile := bufio.NewWriterSize(sandboxFile, 3*1024*1024)
 	g.Encoder = gob.NewEncoder(sandboxFile)
 
 	seclambdaFile := os.NewFile(uintptr(seclambdaSide), "seclambda-file")
+	//bufSeclambdaFile := bufio.NewReaderSize(seclambdaFile, 3*1024*1024)
 	g.Decoder = gob.NewDecoder(seclambdaFile)
 
 	return g
@@ -685,13 +688,13 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, done chan int, sandboxSide in
 	//sandboxFile := os.NewFile(uintptr(sandboxSide), "sandbox-file")
 	//encoder := gob.NewEncoder(sandboxFile)
 	//replyChan := make(chan ReturnMsg)
-	eventChanMap := make(map[int64]chan int)
-	sendMsgCtr := make(chan int)
-	rcvMsgCtr := make(chan int)
-	isRunning := true
+	//eventChanMap := make(map[int64]chan int)
+	//sendMsgCtr := make(chan int)
+	//rcvMsgCtr := make(chan int)
+	//isRunning := true
 	//seclambda_exited := false
-	go g.receiveSeclambdaMsgs(seclambdaSide, &eventChanMap, &isRunning, rcvMsgCtr)
-	go g.sendSeclambdaMsgs(sandboxSide, ch, sendMsgCtr, &eventChanMap)
+	//go g.receiveSeclambdaMsgs(seclambdaSide, &eventChanMap, &isRunning, rcvMsgCtr)
+	//go g.sendSeclambdaMsgs(sandboxSide, ch, sendMsgCtr, &eventChanMap)
 	log.Infof("[Guard] Started Guard")
 	for {
 		// Receive signal from kernel
@@ -700,8 +703,8 @@ func (g *Guard) Run(ch chan KernMsg, ctr chan int, done chan int, sandboxSide in
 		case <-ctr:
 			log.Infof("[Guard] Exiting the go routine")
 
-			sendMsgCtr <- 1
-			<-sendMsgCtr
+			//sendMsgCtr <- 1
+			//<-sendMsgCtr
 
 			done <- 1
 		}
