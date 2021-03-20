@@ -482,7 +482,8 @@ func (k *Kernel) SendEventGuard(event_name []byte, metaStr MetaStruct, data []by
 			k.guard.Encoder.Encode(transMsg)
 			//defer k.guardEventMu.Unlock()
 		}()*/
-		k.guard.Encoder.Encode(transMsg)
+		k.guard.Encoder.Encode(&transMsg)
+		k.guard.SandboxFile.Sync()
 
 		//meta := string(msg.MetaData)
 		fname := k.guard.Get_func_name()

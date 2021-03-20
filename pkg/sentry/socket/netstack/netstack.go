@@ -596,11 +596,13 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 			}
 		}
 
-		//elapsed6 := time.Now()
-		if r := t.Kernel().SendEventGuard(event, metaStr, printBuf, *t.ContainerName()); r == 1 {
-			//t.Infof("[ValidateWrite] Guard Allowed Action")
-		} else {
-			//t.Infof("[ValidateWrite] Guard Disallowed Action")
+		if int(peerAddr.Port) != 3306 {
+			//elapsed6 := time.Now()
+			if r := t.Kernel().SendEventGuard(event, metaStr, printBuf, *t.ContainerName()); r == 1 {
+				//t.Infof("[ValidateWrite] Guard Allowed Action")
+			} else {
+				//t.Infof("[ValidateWrite] Guard Disallowed Action")
+			}
 		}
 		//elapsed7 := time.Since(elapsed6)
 		//log.Infof("[ValidateWriteMeasure] Time waiting for guard decision: %v", elapsed7)

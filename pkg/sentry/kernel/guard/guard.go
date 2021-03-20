@@ -1,7 +1,7 @@
 package guard
 
 import (
-	//"bufio"
+	"bufio"
 	"encoding/gob"
 	"encoding/json"
 	"gvisor.dev/gvisor/pkg/log"
@@ -69,6 +69,14 @@ type Guard struct {
 	Decoder *gob.Decoder
 	// CheckPolicy Mutex
 	checkPolicyMu sync.Mutex
+	// Sandbox File
+	SandboxFile *os.File
+	// Seclambda File
+	SeclambdaFile *os.File
+	// Sandbox File Buffered Writer
+	bufSandboxFile *bufio.Writer
+	// Seclambda File Buffered Reader
+	bufSeclambdaFile *bufio.Reader
 }
 
 type Policy struct {
@@ -184,16 +192,23 @@ func New(ctrIP string, ctrPort int64, sandboxSide int, seclambdaSide int) Guard 
 	g.stateTable = make(map[string]int)
 	g.policyTable = make(map[string]*ListNode)
 
-	sandboxFile := os.NewFile(uintptr(sandboxSide), "sandbox-file")
-	//bufSandboxFile := bufio.NewWriterSize(sandboxFile, 3*1024*1024)
-	g.Encoder = gob.NewEncoder(sandboxFile)
+	g.SandboxFile = os.NewFile(uintptr(sandboxSide), "sandbox-file")
+	//g.bufSandboxFile = bufio.NewWriterSize(g.sandboxFile, 20*1024*1024)
+	g.Encoder = gob.NewEncoder(g.SandboxFile)
 
-	seclambdaFile := os.NewFile(uintptr(seclambdaSide), "seclambda-file")
-	//bufSeclambdaFile := bufio.NewReaderSize(seclambdaFile, 3*1024*1024)
-	g.Decoder = gob.NewDecoder(seclambdaFile)
+	g.SeclambdaFile = os.NewFile(uintptr(seclambdaSide), "seclambda-file")
+	//g.bufSeclambdaFile = bufio.NewReaderSize(g.seclambdaFile, 20*1024*1024)
+	g.Decoder = gob.NewDecoder(g.SeclambdaFile)
 
 	return g
 }
+
+/*
+func (g *Guard) EncodeMessage(message interface{}) {
+	g.Encoder.Encode(message)
+	g.bufSandboxFile.Flush()
+	g.sandboxFile.Sync()
+}*/
 
 func (g *Guard) Lookup(hash_id int, key string) bool {
 	switch hash_id {
