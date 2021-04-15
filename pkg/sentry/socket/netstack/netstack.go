@@ -47,6 +47,7 @@ import (
 	"gvisor.dev/gvisor/pkg/sentry/fs/fsutil"
 	"gvisor.dev/gvisor/pkg/sentry/inet"
 	"gvisor.dev/gvisor/pkg/sentry/kernel"
+	guard "gvisor.dev/gvisor/pkg/sentry/kernel/guard"
 	ktime "gvisor.dev/gvisor/pkg/sentry/kernel/time"
 	"gvisor.dev/gvisor/pkg/sentry/socket"
 	"gvisor.dev/gvisor/pkg/sentry/socket/netfilter"
@@ -565,6 +566,20 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 		// Read till EOF maybe?
 		src.Reader(ctx.(*kernel.Task)).Read(printBuf)
 
+		tls_records, tlserr := guard.TLSParseBytes(printBuf)
+		if tlserr == nil {
+			log.Infof("[Write] TLSParseBytes successfully parsed %v records: ", len(tls_records))
+			if len(tls_records) > 0 {
+				log.Infof("[Write] TLSParseBytes type of first record: ", tls_records[0].ContentType)
+			}
+
+			for _, tlsrecord := range tls_records {
+				if tlsrecord.ContentType == 23 {
+					log.Infof("[Write] TLS Application Record: %v", tlsrecord)
+				}
+			}
+
+		}
 		peerAddr, _ := s.Endpoint.GetRemoteAddress()
 		//localAddr, _ := s.Endpoint.GetLocalAddress()
 		// TODO: Implement protocol logging
@@ -2686,6 +2701,19 @@ func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []
 		printBuf := make([]byte, src.NumBytes())
 		// Read till EOF maybe?
 		src.Reader(t).Read(printBuf)
+		tls_records, tlserr := guard.TLSParseBytes(printBuf)
+		if tlserr == nil {
+			log.Infof("[SendMsg] TLSParseBytes successfully parsed %v records: ", len(tls_records))
+			if len(tls_records) > 0 {
+				log.Infof("[SendMsg] TLSParseBytes type of first record: %v", tls_records[0].ContentType)
+			}
+
+			for _, tlsrecord := range tls_records {
+				if tlsrecord.ContentType == 23 {
+					log.Infof("[SendMsg] TLS Application Record: %v", tlsrecord)
+				}
+			}
+		}
 
 		peerAddr, _ := s.Endpoint.GetRemoteAddress()
 		//localAddr, _ := s.Endpoint.GetLocalAddress()

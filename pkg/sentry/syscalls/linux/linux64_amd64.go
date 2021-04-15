@@ -380,6 +380,7 @@ var AMD64 = &kernel.SyscallTable{
 		334: syscalls.PartiallySupported("rseq", RSeq, "Not supported on all platforms.", nil),
 		350: syscalls.Supported("hypercall", Hypercall1),
 		351: syscalls.Supported("validate_ssl_send", ValidateSSLSend),
+		352: syscalls.Supported("aes_gcm_encrypt", AES_GCM_encrypt),
 
 		// Linux skips ahead to syscall 424 to sync numbers between arches.
 		424: syscalls.ErrorWithEvent("pidfd_send_signal", syserror.ENOSYS, "", nil),

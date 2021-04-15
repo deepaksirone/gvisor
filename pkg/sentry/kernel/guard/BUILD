@@ -7,7 +7,8 @@ go_library(
     srcs = [
         "guard.go",
 	"msg.go",
-	"linked_list.go"
+	"linked_list.go",
+	"parser.go"
     ],
     visibility = ["//pkg/sentry:internal"],
     deps = [

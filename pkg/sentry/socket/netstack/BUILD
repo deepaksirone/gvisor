@@ -30,6 +30,7 @@ go_library(
         "//pkg/sentry/kernel",
         "//pkg/sentry/kernel/auth",
         "//pkg/sentry/kernel/time",
+	"//pkg/sentry/kernel/guard",
         "//pkg/sentry/socket",
         "//pkg/sentry/socket/netfilter",
         "//pkg/sentry/unimpl",
