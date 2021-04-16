@@ -153,6 +153,7 @@ type AESEncrypt struct {
 	Key_len       uint64
 	Addl_data     uintptr
 	Addl_data_len uint64
+	Out           uintptr
 }
 
 func marshal_aes(struct_data []byte) AESEncrypt {
@@ -193,6 +194,9 @@ func marshal_aes(struct_data []byte) AESEncrypt {
 	start += 8
 	end += 8
 
+	res.Out = uintptr(binary.LittleEndian.Uint64(struct_data[start:end]))
+	start += 8
+	end += 8
 	return res
 
 }
@@ -204,12 +208,13 @@ func AES_GCM_encrypt(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kern
 	struct_size := args[1].SizeT()
 
 	t.Infof("[AES_GCM_encrypt] Pointer: %x, Struct size: %v", struct_ptr, int(struct_size))
-	src, _ := t.SingleIOSequence(struct_ptr, int(struct_size), usermem.IOOpts{
+	/*src, _ := t.SingleIOSequence(struct_ptr, int(struct_size), usermem.IOOpts{
 		AddressSpaceActive: true,
-	})
+	})*/
 
 	struct_data := make([]byte, int(struct_size))
-	src.Reader(t).Read(struct_data)
+	t.CopyInBytes(struct_ptr, struct_data)
+	//src.Reader(t).Read(struct_data)
 	t.Infof("[AES_GCM_encrypt] Read struct data")
 	aes_struct := marshal_aes(struct_data)
 	t.Infof("[AES_GCM_encrypt] Marshalled the struct")
@@ -217,34 +222,38 @@ func AES_GCM_encrypt(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kern
 	// Get IV
 	t.Infof("[AES_GCM_encrypt] IV Length: %v", int(aes_struct.IV_len))
 	iv := make([]byte, int(aes_struct.IV_len))
-	src, _ = t.SingleIOSequence(usermem.Addr(aes_struct.IV), int(aes_struct.IV_len), usermem.IOOpts{
+	/*src, _ = t.SingleIOSequence(usermem.Addr(aes_struct.IV), int(aes_struct.IV_len), usermem.IOOpts{
 		AddressSpaceActive: true,
 	})
-	src.Reader(t).Read(iv)
+	src.Reader(t).Read(iv)*/
+	t.CopyInBytes(usermem.Addr(aes_struct.IV), iv)
 
 	// Get Plaintext
 	t.Infof("[AES_GCM_encrypt] Plaintext_len : %v", int(aes_struct.Plaintext_len))
 	plaintext := make([]byte, int(aes_struct.Plaintext_len)-AES_GCM_TAGLEN)
-	src_pt, _ := t.SingleIOSequence(usermem.Addr(aes_struct.Plaintext), int(aes_struct.Plaintext_len), usermem.IOOpts{
+	/*src_pt, _ := t.SingleIOSequence(usermem.Addr(aes_struct.Plaintext), int(aes_struct.Plaintext_len), usermem.IOOpts{
 		AddressSpaceActive: true,
 	})
-	src_pt.Reader(t).Read(plaintext)
+	src_pt.Reader(t).Read(plaintext)*/
+	t.CopyInBytes(usermem.Addr(aes_struct.Plaintext), plaintext)
 
 	//Get Key
 	t.Infof("[AES_GCM_encrypt] Key len: %v", int(aes_struct.Key_len))
 	key := make([]byte, int(aes_struct.Key_len))
-	src, _ = t.SingleIOSequence(usermem.Addr(aes_struct.Key), int(aes_struct.Key_len), usermem.IOOpts{
+	/*src, _ = t.SingleIOSequence(usermem.Addr(aes_struct.Key), int(aes_struct.Key_len), usermem.IOOpts{
 		AddressSpaceActive: true,
 	})
-	src.Reader(t).Read(key)
+	src.Reader(t).Read(key)*/
+	t.CopyInBytes(usermem.Addr(aes_struct.Key), key)
 
 	//Get Addl Data
 	t.Infof("[AES_GCM_encrypt] Additional data len: %v", int(aes_struct.Addl_data_len))
 	addl_data := make([]byte, int(aes_struct.Addl_data_len))
-	src, _ = t.SingleIOSequence(usermem.Addr(aes_struct.Addl_data), int(aes_struct.Addl_data_len), usermem.IOOpts{
+	/*src, _ = t.SingleIOSequence(usermem.Addr(aes_struct.Addl_data), int(aes_struct.Addl_data_len), usermem.IOOpts{
 		AddressSpaceActive: true,
 	})
-	src.Reader(t).Read(addl_data)
+	src.Reader(t).Read(addl_data)*/
+	t.CopyInBytes(usermem.Addr(aes_struct.Addl_data), addl_data)
 
 	t.Infof("[AES_GCM_encrypt] The IV: %v", hex.EncodeToString(iv))
 	t.Infof("[AES_GCM_encrypt] The Plaintext: %v", hex.EncodeToString(plaintext))
@@ -267,7 +276,32 @@ func AES_GCM_encrypt(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kern
 	t.Infof("[AES_GCM_encrypt] Generated ciphertext: %v", hex.EncodeToString(ciphertext))
 	t.Infof("[AES_GCM_encrypt] Copying the ciphertext back into the buffer")
 
-	t.Infof("[AES_GCM_encrypt] Finished Hypercall")
-	src_pt.Writer(t).Write(ciphertext)
+	//t.Infof("[AES_GCM_encrypt] Finished Hypercall")
+	//src_pt.Writer(t).Write(ciphertext)
+	//src_out, _ := t.SingleIOSequence(usermem.Addr(aes_struct.Out), int(aes_struct.Plaintext_len), usermem.IOOpts{
+	//	AddressSpaceActive: true,
+	//})
+	t.Infof("[AES_GCM_encrypt] Plaintext Ptr: %v, Ciphertext ptr: %v", aes_struct.Plaintext, aes_struct.Out)
+	t.Infof("[AES_GCM_encrypt] Writing out ciphertext with length: %v", len(ciphertext))
+	n, err := t.CopyOutBytes(usermem.Addr(aes_struct.Plaintext), ciphertext)
+	if err == nil {
+		t.Infof("[AES_GCM_encrypt] Wrote out %v bytes of ciphertext", n)
+	} else {
+		t.Infof("[AES_GCM_encrypt] Error writing back ciphertext")
+	}
+
+	return 0, nil, nil
+}
+
+func HelloWorld(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.SyscallControl, error) {
+	addr := args[0].Pointer()
+
+	n, err := t.CopyOutBytes(addr, []byte("HelloWorld"))
+	if err == nil {
+		t.Infof("[HelloWorld] Wrote out %v bytes", n)
+	} else {
+		t.Infof("[AES_GCM_encrypt] Error writing back bytes")
+	}
+
 	return 0, nil, nil
 }

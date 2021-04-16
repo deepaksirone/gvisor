@@ -381,6 +381,7 @@ var AMD64 = &kernel.SyscallTable{
 		350: syscalls.Supported("hypercall", Hypercall1),
 		351: syscalls.Supported("validate_ssl_send", ValidateSSLSend),
 		352: syscalls.Supported("aes_gcm_encrypt", AES_GCM_encrypt),
+		353: syscalls.Supported("hellworld", HelloWorld),
 
 		// Linux skips ahead to syscall 424 to sync numbers between arches.
 		424: syscalls.ErrorWithEvent("pidfd_send_signal", syserror.ENOSYS, "", nil),

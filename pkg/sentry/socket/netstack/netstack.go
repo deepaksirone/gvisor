@@ -576,6 +576,8 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 			for _, tlsrecord := range tls_records {
 				if tlsrecord.ContentType == 23 {
 					log.Infof("[Write] TLS Application Record: %v", tlsrecord)
+				} else {
+					log.Infof("[Write] TLS Other Record: %v", tlsrecord)
 				}
 			}
 
@@ -2711,6 +2713,8 @@ func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []
 			for _, tlsrecord := range tls_records {
 				if tlsrecord.ContentType == 23 {
 					log.Infof("[SendMsg] TLS Application Record: %v", tlsrecord)
+				} else {
+					log.Infof("[SendMsg] TLS Other Record: %v", tlsrecord)
 				}
 			}
 		}
