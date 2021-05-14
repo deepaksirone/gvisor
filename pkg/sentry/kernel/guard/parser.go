@@ -3,6 +3,7 @@ package guard
 import (
 	"encoding/binary"
 	"errors"
+	"gvisor.dev/gvisor/pkg/log"
 )
 
 const (
@@ -24,7 +25,9 @@ type TLSRecord struct {
 	// Record length
 	Length uint16
 	// Record Data of size Length
-	AppData AEADApplicationData
+	//AppData AEADApplicationData
+	// The data in the record
+	Data []byte
 }
 
 // Define the Application Record Type
@@ -40,6 +43,7 @@ type AEADApplicationData struct {
 }
 
 func TLSParseBytes(data []byte) ([]TLSRecord, error) {
+	log.Infof("[TLSParseBytes] Parsing TLSRecords")
 	if data[0] != ApplicationData && data[0] != ChangeCipherSpec && data[0] != Handshake && data[0] != Alert {
 		return nil, errors.New("Not a TLSRecord")
 	}
@@ -62,15 +66,17 @@ func TLSParseBytes(data []byte) ([]TLSRecord, error) {
 		ret.ProtMinor = data[l+2]
 		ret.Length = binary.BigEndian.Uint16(data[l+3 : l+5])
 		//ret.Data = make([]byte, ret.Length)
-		if ret.ContentType == ApplicationData {
-			ret.AppData = parseAEADApplicationData(data[l+5 : l+5+int(ret.Length)])
-		}
+		//if ret.ContentType == ApplicationData {
+		//	ret.AppData = parseAEADApplicationData(data[l+5 : l+5+int(ret.Length)])
+		//}
+
+		ret.Data = append(ret.Data, data[l+5:l+5+int(ret.Length)]...)
 
 		retSlice = append(retSlice, ret)
 		prev_l = l
 		l += int(ret.Length) + 5
 	}
-
+	log.Infof("[TLSParseBytes] Finished parsing TLSRecords")
 	return retSlice, nil
 }
 

@@ -85,6 +85,7 @@ go_library(
         "//pkg/sentry/kernel/shm",
         "//pkg/sentry/kernel/signalfd",
         "//pkg/sentry/kernel/time",
+	"//pkg/sentry/kernel/guard",
         "//pkg/sentry/limits",
         "//pkg/sentry/loader",
         "//pkg/sentry/memmap",

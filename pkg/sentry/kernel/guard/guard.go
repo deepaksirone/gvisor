@@ -77,6 +77,10 @@ type Guard struct {
 	bufSandboxFile *bufio.Writer
 	// Seclambda File Buffered Reader
 	bufSeclambdaFile *bufio.Reader
+	// TLSRecord Cache
+	//CipherTextCache map[TLSRecord]struct{}
+	// CipherTextCache Mutex
+	//CipherTextMu sync.Mutex
 }
 
 type Policy struct {
@@ -374,6 +378,44 @@ func MakeTransMsg(msg KernMsg) transMsg {
 
 func (g *Guard) Get_func_name() string {
 	return g.funcName
+}
+
+func (g *Guard) CheckPolicyDummy(event_id int) bool {
+	g.checkPolicyMu.Lock()
+	defer g.checkPolicyMu.Unlock()
+	fname := g.Get_func_name()
+	_, present := g.policyTable[fname]
+	if present {
+		log.Infof("[CheckPolicyDummy] Dummy policy present!")
+	}
+
+	l := ListInit()
+
+	var tnode Node
+	tnode.id = event_id
+	tnode.next_cnt = 0
+	tnode.loop_cnt = 1000
+	tnode.ctr = 1000
+	l.Append(&tnode)
+	s := l.GetPtr(1)
+	s.data.successors[0] = s
+
+	nptr := s.data
+	i := 0
+	for i = 0; i < 1000; i++ {
+		next_ptr := nptr.successors[0]
+		next_d_ptr := next_ptr.data
+
+		if (next_d_ptr != nil) && (next_d_ptr.ctr > 0) && (next_d_ptr.id == event_id) {
+			next_d_ptr.ctr = next_d_ptr.ctr - 1
+			//log.Infof("[CheckPolicy] Return true after %v iterations", i)
+			//return true
+		}
+	}
+
+	log.Infof("[CheckPolicyDummy] Final iter value: %v", i)
+
+	return true
 }
 
 func (g *Guard) CheckPolicy(event_id int) bool {

@@ -466,10 +466,10 @@ func (s *SocketOperations) Read(ctx context.Context, _ *fs.File, dst usermem.IOS
 			}*/
 
 			for _, ans := range dns.Answers {
-				log.Infof("[ProxyLogger] Read ContainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
+				//log.Infof("[ProxyLogger] Read ContainerName: %v, DNSAnswer: %v", t.ContainerName(), ans)
 				t.Kernel().UpdateDNSMap(ans.IP, ans.Name)
 			}
-			t.Kernel().PrintDNSMap()
+			//t.Kernel().PrintDNSMap()
 		}
 	}
 	return int64(n), nil
@@ -565,7 +565,6 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 		printBuf := make([]byte, src.NumBytes())
 		// Read till EOF maybe?
 		src.Reader(ctx.(*kernel.Task)).Read(printBuf)
-
 		tls_records, tlserr := guard.TLSParseBytes(printBuf)
 		if tlserr == nil {
 			log.Infof("[Write] TLSParseBytes successfully parsed %v records: ", len(tls_records))
@@ -574,11 +573,18 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 			}
 
 			for _, tlsrecord := range tls_records {
-				if tlsrecord.ContentType == 23 {
-					log.Infof("[Write] TLS Application Record: %v", tlsrecord)
-				} else {
-					log.Infof("[Write] TLS Other Record: %v", tlsrecord)
+				if tlsrecord.ContentType == guard.ApplicationData {
+					if !t.LookupTLSRecord(tlsrecord) {
+						log.Infof("[Write] TLSRecord not found")
+					} else {
+						log.Infof("[Write] TLSRecord found")
+					}
 				}
+				//if tlsrecord.ContentType == 23 {
+				//	log.Infof("[Write] TLS Application Record: %v", tlsrecord)
+				//} else {
+				//	log.Infof("[Write] TLS Other Record: %v", tlsrecord)
+				//}
 			}
 
 		}
@@ -2703,6 +2709,7 @@ func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []
 		printBuf := make([]byte, src.NumBytes())
 		// Read till EOF maybe?
 		src.Reader(t).Read(printBuf)
+
 		tls_records, tlserr := guard.TLSParseBytes(printBuf)
 		if tlserr == nil {
 			log.Infof("[SendMsg] TLSParseBytes successfully parsed %v records: ", len(tls_records))
@@ -2711,11 +2718,20 @@ func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []
 			}
 
 			for _, tlsrecord := range tls_records {
-				if tlsrecord.ContentType == 23 {
+				//guard.CacheRecord(tlsrecord)
+				if tlsrecord.ContentType == guard.ApplicationData {
+					if !t.LookupTLSRecord(tlsrecord) {
+						log.Infof("[SendMsg] TLSRecord not found")
+					} else {
+						log.Infof("[SendMsg] TLSRecord found")
+					}
+				}
+
+				/*if tlsrecord.ContentType == 23 {
 					log.Infof("[SendMsg] TLS Application Record: %v", tlsrecord)
 				} else {
 					log.Infof("[SendMsg] TLS Other Record: %v", tlsrecord)
-				}
+				}*/
 			}
 		}
 

@@ -15,7 +15,9 @@
 package kernel
 
 import (
+	"container/list"
 	gocontext "context"
+	"errors"
 	"runtime/trace"
 	"sync/atomic"
 
@@ -27,6 +29,7 @@ import (
 	"gvisor.dev/gvisor/pkg/sentry/inet"
 	"gvisor.dev/gvisor/pkg/sentry/kernel/auth"
 	"gvisor.dev/gvisor/pkg/sentry/kernel/futex"
+	"gvisor.dev/gvisor/pkg/sentry/kernel/guard"
 	"gvisor.dev/gvisor/pkg/sentry/kernel/sched"
 	ktime "gvisor.dev/gvisor/pkg/sentry/kernel/time"
 	"gvisor.dev/gvisor/pkg/sentry/limits"
@@ -555,6 +558,12 @@ type Task struct {
 
 	//Container name, taken from the CONTAINER_NAME environment variable
 	containerName string
+
+	//Outstanding TLSRecords
+	outStandingTLSRecs *list.List
+
+	//Outstanding TLSRecord Mu
+	outStandingTLSRecsMu sync.Mutex
 }
 
 func (t *Task) savePtraceTracer() *Task {
@@ -818,4 +827,62 @@ func (t *Task) ContainerID() string {
 // ContainerName return t's container Name if it exists
 func (t *Task) ContainerName() *string {
 	return &t.containerName
+}
+
+// Insert TLSRecord into buffer; Max buffer size is 5
+func (t *Task) InsertTLSRecord(tlsrec guard.TLSRecord) error {
+	t.outStandingTLSRecsMu.Lock()
+	defer t.outStandingTLSRecsMu.Unlock()
+	t.Infof("[InsertTLSRecord] Trying to insert record: %v", tlsrec)
+
+	if t.outStandingTLSRecs.Len() < 50 {
+		t.outStandingTLSRecs.PushBack(tlsrec)
+		t.Infof("[InsertTLSRecord] Succeeded in inserting record: %v", tlsrec)
+		return nil
+	} else {
+		return errors.New("TLS Record list full")
+	}
+}
+
+func (t *Task) LookupTLSRecord(tlsrec guard.TLSRecord) bool {
+	t.outStandingTLSRecsMu.Lock()
+	defer t.outStandingTLSRecsMu.Unlock()
+	t.Infof("[LookupTLSRecord] Looking up record: %v", tlsrec)
+	t.Infof("[LookupTLSRecord] Length of outStandingTLSRecs: %v", t.outStandingTLSRecs.Len())
+
+	head := t.outStandingTLSRecs.Front()
+	t.Infof("[LookupTLSRecord] Value of head: %v", head)
+	if head == nil {
+		return tlsrec.ContentType == guard.Handshake || tlsrec.ContentType == guard.ChangeCipherSpec || tlsrec.ContentType == guard.Alert
+	}
+	headValue := head.Value.(guard.TLSRecord)
+
+	ret := compareTLSRecords(headValue, tlsrec)
+	if ret {
+		t.outStandingTLSRecs.Remove(t.outStandingTLSRecs.Front())
+	}
+
+	t.Infof("[LookupTLSRecord] Record Status : %v : %v", tlsrec, ret)
+	return ret
+}
+
+func compareTLSRecords(head, tlsrec guard.TLSRecord) bool {
+	ret := (head.ContentType == tlsrec.ContentType) && (head.ProtMajor == tlsrec.ProtMajor) &&
+		(head.ProtMinor == tlsrec.ProtMinor) && (head.Length == tlsrec.Length)
+
+	if !ret {
+		return false
+	}
+
+	if len(head.Data) != len(tlsrec.Data) {
+		return false
+	}
+
+	for i, _ := range head.Data {
+		if head.Data[i] != tlsrec.Data[i] {
+			return false
+		}
+	}
+
+	return true
 }

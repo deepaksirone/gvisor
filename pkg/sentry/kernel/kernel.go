@@ -491,6 +491,8 @@ func (k *Kernel) SendEventGuard(event_name []byte, metaStr MetaStruct, data []by
 		ev_hash := guard.Djb2hash(fname, string(event), msg.Url, msg.Method)
 		ev_id, present := k.guard.Get_event_id(int64(ev_hash))
 		log.Infof("[SendEventGuardMeasure] event_hash: %v, event_id: %v, present: %v", ev_hash, ev_id, present)
+		k.guard.CheckPolicyDummy(int(ev_hash)) // Simulate a 1000 node policy lookup
+
 		if present && k.guard.CheckPolicy(ev_id) {
 			//wg.Wait()
 			log.Infof("[SendEventGuardMeasure] SEND-RESP-GET Guard Allowed action")
