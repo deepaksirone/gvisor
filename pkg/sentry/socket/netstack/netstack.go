@@ -619,7 +619,7 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 			}
 		}
 
-		if int(peerAddr.Port) != 3306 {
+		if int(peerAddr.Port) != 3306 && metaStr.PeerAddr != "127.0.0.1" {
 			//elapsed6 := time.Now()
 			if r := t.Kernel().SendEventGuard(event, metaStr, printBuf, *t.ContainerName()); r == 1 {
 				//t.Infof("[ValidateWrite] Guard Allowed Action")

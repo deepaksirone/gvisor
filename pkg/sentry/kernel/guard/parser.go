@@ -69,8 +69,11 @@ func TLSParseBytes(data []byte) ([]TLSRecord, error) {
 		//if ret.ContentType == ApplicationData {
 		//	ret.AppData = parseAEADApplicationData(data[l+5 : l+5+int(ret.Length)])
 		//}
-
-		ret.Data = append(ret.Data, data[l+5:l+5+int(ret.Length)]...)
+		if l+5+int(ret.Length) <= len(data) {
+			ret.Data = append(ret.Data, data[l+5:l+5+int(ret.Length)]...)
+		} else {
+			break
+		}
 
 		retSlice = append(retSlice, ret)
 		prev_l = l
