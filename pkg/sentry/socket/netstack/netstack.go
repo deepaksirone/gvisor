@@ -554,7 +554,7 @@ func inBlackList(container *string) bool {
 func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IOSequence, _ int64) (int64, error) {
 	f := &ioSequencePayload{ctx: ctx, src: src}
 	t := ctx.(*kernel.Task)
-	//start := time.Now()
+	start := time.Now()
 	event := []byte("SEND")
 
 	if !inBlackList(t.ContainerName()) {
@@ -562,22 +562,27 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 
 		//log.Infof("[ValidateWriteMeasure] Time for BlackListCheck: %v", elapsed1)
 		//elapsed2 := time.Now()
+		time_tls_parsing := time.Now()
 		printBuf := make([]byte, src.NumBytes())
 		// Read till EOF maybe?
 		src.Reader(ctx.(*kernel.Task)).Read(printBuf)
 		tls_records, tlserr := guard.TLSParseBytes(printBuf)
+		time_tls_parsing_end := time.Since(time_tls_parsing)
+		time_tls_lookup_start := time.Now()
 		if tlserr == nil {
-			log.Infof("[Write] TLSParseBytes successfully parsed %v records: ", len(tls_records))
+			//time_tls_lookup_start := time.Now()
+			//log.Infof("[Write] TLSParseBytes successfully parsed %v records: ", len(tls_records))
 			if len(tls_records) > 0 {
-				log.Infof("[Write] TLSParseBytes type of first record: ", tls_records[0].ContentType)
+				//log.Infof("[Write] TLSParseBytes type of first record: ", tls_records[0].ContentType)
 			}
 
 			for _, tlsrecord := range tls_records {
 				if tlsrecord.ContentType == guard.ApplicationData {
 					if !t.LookupTLSRecord(tlsrecord) {
-						log.Infof("[Write] TLSRecord not found")
+						//log.Infof("[Write] TLSRecord not found")
 					} else {
-						log.Infof("[Write] TLSRecord found")
+						//log.Infof("[Write] TLSRecord found")
+						event = []byte("GETE")
 					}
 				}
 				//if tlsrecord.ContentType == 23 {
@@ -586,8 +591,12 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 				//	log.Infof("[Write] TLS Other Record: %v", tlsrecord)
 				//}
 			}
+			//time_tls_lookup_end := time.Since(time_tls_lookup_start)
 
 		}
+		time_tls_lookup_end := time.Since(time_tls_lookup_start)
+
+		time_event_construction_start := time.Now()
 		peerAddr, _ := s.Endpoint.GetRemoteAddress()
 		//localAddr, _ := s.Endpoint.GetLocalAddress()
 		// TODO: Implement protocol logging
@@ -618,19 +627,26 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 				event = []byte("GETE")
 			}
 		}
+		time_event_construction_end := time.Since(time_event_construction_start)
 
+		var r int
+		var time_ctr time.Duration
+		var time_guard time.Duration
+		time_guard_check_start := time.Now()
 		if int(peerAddr.Port) != 3306 && metaStr.PeerAddr != "127.0.0.1" {
 			//elapsed6 := time.Now()
-			if r := t.Kernel().SendEventGuard(event, metaStr, printBuf, *t.ContainerName()); r == 1 {
+			if r, time_ctr, time_guard = t.Kernel().SendEventGuard(event, metaStr, printBuf, *t.ContainerName()); r == 1 {
 				//t.Infof("[ValidateWrite] Guard Allowed Action")
 			} else {
 				//t.Infof("[ValidateWrite] Guard Disallowed Action")
 			}
 		}
-		//elapsed7 := time.Since(elapsed6)
-		//log.Infof("[ValidateWriteMeasure] Time waiting for guard decision: %v", elapsed7)
+		time_guard_check_end := time.Since(time_guard_check_start)
+		if string(event) == "GETE" {
+			log.Infof("[GETEValidateWriteMeasure] %v:%v:%v:%v:%v:%v:%v", time_tls_parsing_end, time_tls_lookup_end, time_event_construction_end, time_ctr, time_guard, time_guard_check_end, time.Since(start))
+		}
 	}
-	//log.Infof("[ValidateWriteMeasure] Write syscall overhead for event : %v : %v", event, time.Since(start))
+	//log.Infof("[ValidateWriteMeasure] Write syscall overhead for event : %v : %v", string(event), time.Since(start))
 
 	n, resCh, err := s.Endpoint.Write(f, tcpip.WriteOptions{})
 	if err == tcpip.ErrWouldBlock {
@@ -653,6 +669,7 @@ func (s *SocketOperations) Write(ctx context.Context, _ *fs.File, src usermem.IO
 	if int64(n) < src.NumBytes() {
 		return int64(n), syserror.ErrWouldBlock
 	}
+	log.Infof("[ValidateWriteMeasure] Total time for Write syscall : %v : %v", event, time.Since(start))
 
 	return int64(n), nil
 }
@@ -2699,31 +2716,35 @@ func generateUrl(hostname string, port uint16, data []byte) string {
 // tcpip.Endpoint.
 func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []byte, flags int, haveDeadline bool, deadline ktime.Time, controlMessages socket.ControlMessages) (int, *syserr.Error) {
 
-	//start := time.Now()
+	start := time.Now()
 	event := []byte("SEND")
 	if !inBlackList(t.ContainerName()) {
 		//elapsed1 := time.Since(start)
 		//log.Infof("[ValidateSendMsgMeasure] Time for BlackListCheck: %v", elapsed1)
 
 		//start1 := time.Now()
+		time_tls_parsing_start := time.Now()
 		printBuf := make([]byte, src.NumBytes())
 		// Read till EOF maybe?
 		src.Reader(t).Read(printBuf)
 
 		tls_records, tlserr := guard.TLSParseBytes(printBuf)
+		time_tls_parsing_end := time.Since(time_tls_parsing_start)
+		time_tls_lookup_start := time.Now()
 		if tlserr == nil {
-			log.Infof("[SendMsg] TLSParseBytes successfully parsed %v records: ", len(tls_records))
+			//log.Infof("[SendMsg] TLSParseBytes successfully parsed %v records: ", len(tls_records))
 			if len(tls_records) > 0 {
-				log.Infof("[SendMsg] TLSParseBytes type of first record: %v", tls_records[0].ContentType)
+				//log.Infof("[SendMsg] TLSParseBytes type of first record: %v", tls_records[0].ContentType)
 			}
 
 			for _, tlsrecord := range tls_records {
 				//guard.CacheRecord(tlsrecord)
 				if tlsrecord.ContentType == guard.ApplicationData {
 					if !t.LookupTLSRecord(tlsrecord) {
-						log.Infof("[SendMsg] TLSRecord not found")
+						//log.Infof("[SendMsg] TLSRecord not found")
 					} else {
-						log.Infof("[SendMsg] TLSRecord found")
+						//log.Infof("[SendMsg] TLSRecord found")
+						event = []byte("GETE")
 					}
 				}
 
@@ -2734,6 +2755,9 @@ func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []
 				}*/
 			}
 		}
+		time_tls_lookup_end := time.Since(time_tls_lookup_start)
+
+		time_event_construction_start := time.Now()
 
 		peerAddr, _ := s.Endpoint.GetRemoteAddress()
 		//localAddr, _ := s.Endpoint.GetLocalAddress()
@@ -2773,16 +2797,26 @@ func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []
 			}
 		}
 
-		if r := t.Kernel().SendEventGuard(event, metaStr, printBuf, *t.ContainerName()); r == 1 {
+		time_event_construction_end := time.Since(time_event_construction_start)
+		var r int
+                var time_ctr time.Duration
+                var time_guard time.Duration
+		time_guard_check_start := time.Now()
+		if r, time_ctr, time_guard = t.Kernel().SendEventGuard(event, metaStr, printBuf, *t.ContainerName()); r == 1 {
 			//t.Infof("[ValidateSendMsg] Guard Allowed Action")
 		} else {
 			//t.Infof("[ValidateSendMsg] Guard Disallowed Action")
 		}
 
-		//elapsed4 := time.Since(start3)
+		time_guard_check_end := time.Since(time_guard_check_start)
+		if string(event) == "GETE" {
+			log.Infof("[GETEValidateSendMsgMeasure] %v:%v:%v:%v:%v:%v:%v", time_tls_parsing_end, time_tls_lookup_end, time_event_construction_end, time_ctr, time_guard, time_guard_check_end, time.Since(start))
+                }
+
 		//log.Infof("[ValidateSendMsgMeasure] Time for guard decision: %v", elapsed4)
 	}
 
+	//log.Infof("[ValidateSendMsgMeasure] Time for guard decision: %v", elapsed4)
 	//log.Infof("[ValidateSendMsgMeasure] The SendMsg system call overhead for event: %v : %v", event, time.Since(start))
 	// Reject Unix control messages.
 	if !controlMessages.Unix.Empty() {
@@ -2840,21 +2874,27 @@ func (s *SocketOperations) SendMsg(t *kernel.Task, src usermem.IOSequence, to []
 		total += n
 
 		if err != nil && err != tcpip.ErrWouldBlock && total == 0 {
+			log.Infof("[ValidateSendMsgMeasure] Total time for ValidateSendMsgMeasure: %v : %v", event, time.Since(start))
 			return 0, syserr.TranslateNetstackError(err)
 		}
 
 		if err == nil && v.src.NumBytes() == 0 || err != nil && err != tcpip.ErrWouldBlock {
+			log.Infof("[ValidateSendMsgMeasure] Total time for ValidateSendMsgMeasure: %v : %v", event, time.Since(start))
 			return int(total), nil
 		}
 
 		if err := t.BlockWithDeadline(ch, haveDeadline, deadline); err != nil {
 			if err == syserror.ETIMEDOUT {
+				log.Infof("[ValidateSendMsgMeasure] Total time for ValidateSendMsgMeasure: %v : %v", event, time.Since(start))
 				return int(total), syserr.ErrTryAgain
 			}
 			// handleIOError will consume errors from t.Block if needed.
+			log.Infof("[ValidateSendMsgMeasure] Total time for ValidateSendMsgMeasure: %v : %v", event, time.Since(start))
 			return int(total), syserr.FromError(err)
 		}
 	}
+
+	//log.Infof("[ValidateSendMsgMeasure] Total time for ValidateSendMsgMeasure: %v : %v", event, time.Since(start))
 }
 
 // Ioctl implements fs.FileOperations.Ioctl.

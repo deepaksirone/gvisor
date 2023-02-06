@@ -3,7 +3,7 @@ package guard
 import (
 	"encoding/binary"
 	"errors"
-	"gvisor.dev/gvisor/pkg/log"
+	//"gvisor.dev/gvisor/pkg/log"
 )
 
 const (
@@ -43,7 +43,7 @@ type AEADApplicationData struct {
 }
 
 func TLSParseBytes(data []byte) ([]TLSRecord, error) {
-	log.Infof("[TLSParseBytes] Parsing TLSRecords")
+	//log.Infof("[TLSParseBytes] Parsing TLSRecords")
 	if data[0] != ApplicationData && data[0] != ChangeCipherSpec && data[0] != Handshake && data[0] != Alert {
 		return nil, errors.New("Not a TLSRecord")
 	}
@@ -79,7 +79,7 @@ func TLSParseBytes(data []byte) ([]TLSRecord, error) {
 		prev_l = l
 		l += int(ret.Length) + 5
 	}
-	log.Infof("[TLSParseBytes] Finished parsing TLSRecords")
+	//log.Infof("[TLSParseBytes] Finished parsing TLSRecords")
 	return retSlice, nil
 }
 

@@ -394,9 +394,11 @@ type MetaStruct struct {
 	SessionId string
 }
 
-func (k *Kernel) SendEventGuard(event_name []byte, metaStr MetaStruct, data []byte, containerName string) int {
+func (k *Kernel) SendEventGuard(event_name []byte, metaStr MetaStruct, data []byte, containerName string) (int, time.Duration, time.Duration) {
 	k.guardEventMu.Lock()
 	defer k.guardEventMu.Unlock()
+	var time_ctr_decision_end time.Duration
+	var time_local_guard_end time.Duration
 	/*if event_name[0] == 'S' || event_name[0] == 'R' || event_name[0] == 'E' {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
@@ -482,34 +484,64 @@ func (k *Kernel) SendEventGuard(event_name []byte, metaStr MetaStruct, data []by
 			k.guard.Encoder.Encode(transMsg)
 			//defer k.guardEventMu.Unlock()
 		}()*/
+		var retMsg guard.ReturnMsg
+
+		fname := k.guard.Get_func_name()
+                        //info := strings.Split(meta, ":")
+                ev_hash := guard.Djb2hash(fname, string(event), msg.Url, msg.Method)
+                ev_id, present := k.guard.Get_event_id(int64(ev_hash))
+
+		time_ctr_decision_start := time.Now()
 		k.guard.Encoder.Encode(&transMsg)
 		k.guard.SandboxFile.Sync()
 
+		if event[0]== 'G' {
+			//k.guard.Decoder.Decode(&retMsg)
+			if err := k.guard.Decoder.Decode(&retMsg); err != nil {
+				//log.Infof("[ReceiveDecisionGuard] Error receiving reply from seclambda proxy")
+			} else {
+				//log.Infof("[ReceiveDecisionGuard] Received reply from seclambda proxy")
+			}
+			time_ctr_decision_end = time.Since(time_ctr_decision_start)
+			time_local_guard_start := time.Now()
+			                //meta := string(msg.MetaData)
+			//fname := k.guard.Get_func_name()
+			//info := strings.Split(meta, ":")
+			//ev_hash := guard.Djb2hash(fname, string(event), msg.Url, msg.Method)
+			//ev_id, present := k.guard.Get_event_id(int64(ev_hash))
+			//log.Infof("[SendEventGuardMeasure] event: %v, event_hash: %v, event_id: %v, present: %v", event, ev_hash, ev_id, present)
+			k.guard.CheckPolicyDummy(int(ev_hash)) // Simulate a 1000 node policy lookup
+			time_local_guard_end = time.Since(time_local_guard_start)
+
+		}
+
+
 		//meta := string(msg.MetaData)
-		fname := k.guard.Get_func_name()
+		//fname := k.guard.Get_func_name()
 		//info := strings.Split(meta, ":")
-		ev_hash := guard.Djb2hash(fname, string(event), msg.Url, msg.Method)
-		ev_id, present := k.guard.Get_event_id(int64(ev_hash))
-		log.Infof("[SendEventGuardMeasure] event_hash: %v, event_id: %v, present: %v", ev_hash, ev_id, present)
-		k.guard.CheckPolicyDummy(int(ev_hash)) // Simulate a 1000 node policy lookup
+		//ev_hash := guard.Djb2hash(fname, string(event), msg.Url, msg.Method)
+		//ev_id, present := k.guard.Get_event_id(int64(ev_hash))
+		//log.Infof("[SendEventGuardMeasure] event: %v, event_hash: %v, event_id: %v, present: %v", event, ev_hash, ev_id, present)
+		//k.guard.CheckPolicyDummy(int(ev_hash)) // Simulate a 1000 node policy lookup
 
 		if present && k.guard.CheckPolicy(ev_id) {
 			//wg.Wait()
-			log.Infof("[SendEventGuardMeasure] SEND-RESP-GET Guard Allowed action")
-			return 1
+			//log.Infof("[SendEventGuardMeasure] SEND-RESP-GET Guard Allowed action")
+			return 1, time_ctr_decision_end, time_local_guard_end
 		} else {
 			//elapsed2 := time.Since(start)
 			//wg.Wait()
-			log.Infof("[SendEventGuardMeasure] SEND-RESP-GET Guard Disallowed action")
-			return 0
+			//log.Infof("[SendEventGuardMeasure] SEND-RESP-GET Guard Disallowed action")
+			return 0, time_ctr_decision_end, time_local_guard_end
 		}
+
 	} else if event[0] == 'E' {
 		k.guard.PolicyInit()
 		//defer k.guardEventMu.Unlock()
-		return 1
+		return 1, time_ctr_decision_end, time_local_guard_end
 	}
 
-	return 1
+	return 1, time_ctr_decision_end, time_local_guard_end
 
 	/*recv := <-recvChan
 	elapsed2 := time.Since(start3)

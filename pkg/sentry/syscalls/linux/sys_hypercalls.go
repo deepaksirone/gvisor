@@ -12,12 +12,13 @@ import (
 	"gvisor.dev/gvisor/pkg/usermem"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const AES_GCM_TAGLEN = 16
 
 func Hypercall1(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.SyscallControl, error) {
-	fd := args[0].Int()
+	/*fd := args[0].Int()
 	ip := usermem.Addr(t.Arch().IP())
 	ar, err := ip.RoundDown().ToRange(usermem.PageSize)
 	valid := t.GetValid(fd)
@@ -50,7 +51,7 @@ func Hypercall1(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.Sy
 	d := vma.ValuePtr().GetDeviceID()
 
 	t.Infof("Hypercall1: Mapped name of VMA: %s, Inode Number: %x, Device Number: %x", v, i, d)
-	//t.Kernel().SendDummyGuard()
+	//t.Kernel().SendDummyGuard()*/
 	return 0, nil, nil
 }
 
@@ -130,16 +131,16 @@ func ValidateSSLSend(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kern
 	m.SessionId = session_id
 
 	//t.Infof("[ValidateSSLSend] The meta str: %s", meta_str)
-	event := []byte("SEND")
-	if method == "GET" {
-		event = []byte("GETE")
-	}
+	//event := []byte("SEND")
+	//if method == "GET" {
+	//	event = []byte("GETE")
+	//}
 
-	if r := t.Kernel().SendEventGuard(event, m, data_slice, *t.ContainerName()); r == 1 {
+	/*if r := t.Kernel().SendEventGuard(event, m, data_slice, *t.ContainerName()); r == 1 {
 		//t.Infof("[ValidateSSLSend] Guard allowed the action")
 	} else {
 		//t.Infof("[ValidateSSLSend] Guard disallowed action")
-	}
+	}*/
 
 	// Need to write protect the payload ptr address range
 	return 0, nil, nil
@@ -204,7 +205,8 @@ func marshal_aes(struct_data []byte) AESEncrypt {
 
 // key, key_len, iv, iv_len, plaintext, plaintext_len, additional data, additional data length
 func AES_GCM_encrypt(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kernel.SyscallControl, error) {
-	t.Infof("[AES_GCM_encrypt] In the hypercall")
+	//t.Infof("[AES_GCM_encrypt] In the hypercall")
+	time_encrypt_start := time.Now()
 	struct_ptr := args[0].Pointer()
 	struct_size := args[1].SizeT()
 
@@ -264,21 +266,22 @@ func AES_GCM_encrypt(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kern
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		t.Infof("[AES_GCM_encrypt] Failed to create AES cipher")
+		//t.Infof("[AES_GCM_encrypt] Failed to create AES cipher")
 		return 0, nil, nil
 	}
 
 	aesgcm, err := cipher.NewGCM(block)
 	if err != nil {
-		t.Infof("[AES_GCM_encrypt] Failed to create AES cipher")
+		//t.Infof("[AES_GCM_encrypt] Failed to create AES cipher")
 		return 0, nil, nil
 	}
 
 	ciphertext := aesgcm.Seal(nil, iv, plaintext, addl_data)
 	if addl_data[8] == guard.ApplicationData {
 		tlsrec := constructTLSRecord(addl_data, ciphertext, iv)
+		//t.Infof("[AES_GCM_APP_DATA]: %v", string(plaintext))
 		if t.InsertTLSRecord(tlsrec) != nil {
-			t.Infof("[AES_GCM_encrypt] Failed to insert TLSRecord")
+			//t.Infof("[AES_GCM_encrypt] Failed to insert TLSRecord")
 			return 0, nil, nil
 		}
 	}
@@ -293,11 +296,15 @@ func AES_GCM_encrypt(t *kernel.Task, args arch.SyscallArguments) (uintptr, *kern
 	//})
 	//t.Infof("[AES_GCM_encrypt] Plaintext Ptr: %v, Ciphertext ptr: %v", aes_struct.Plaintext, aes_struct.Out)
 	//t.Infof("[AES_GCM_encrypt] Writing out ciphertext with length: %v", len(ciphertext))
-	n, err := t.CopyOutBytes(usermem.Addr(aes_struct.Plaintext), ciphertext)
+	_, err = t.CopyOutBytes(usermem.Addr(aes_struct.Plaintext), ciphertext)
 	if err == nil {
-		t.Infof("[AES_GCM_encrypt] Wrote out %v bytes of ciphertext", n)
+		//t.Infof("[AES_GCM_encrypt] Wrote out %v bytes of ciphertext", n)
 	} else {
-		t.Infof("[AES_GCM_encrypt] Error writing back ciphertext")
+		//t.Infof("[AES_GCM_encrypt] Error writing back ciphertext")
+	}
+	time_encrypt_end := time.Since(time_encrypt_start)
+	if addl_data[8] == guard.ApplicationData {
+		t.Infof("[AES_GCM_encrypt_measure] %v", time_encrypt_end)
 	}
 
 	return 0, nil, nil
